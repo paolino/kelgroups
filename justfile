@@ -8,7 +8,7 @@ test:
 
 # Format Haskell sources
 format:
-    fourmolu -i lib/**/*.hs
+    fourmolu -i lib/**/*.hs test/*.hs
 
 # Lint Haskell sources
 lint:
