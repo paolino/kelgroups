@@ -18,8 +18,6 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import KelGroups.Client.Event (Proposal(..))
-import Effect.Class (liftEffect)
-import FFI.Storage as Storage
 import KelGroups.Client.State (GroupState, isAdmin, isMember)
 import KelGroups.Client.Types (Admin(..), Member, Role(..))
 
