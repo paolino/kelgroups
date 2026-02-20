@@ -63,11 +63,12 @@ executable kelgroups-server
   hs-source-dirs: app
   main-is:        Main.hs
   build-depends:
-    , base       >=4.18 && <5
+    , base            >=4.18 && <5
     , kelgroups
-    , stm        >=2.5  && <2.7
-    , text       >=2.0  && <2.2
-    , warp       >=3.3  && <3.5
+    , stm             >=2.5  && <2.7
+    , text            >=2.0  && <2.2
+    , wai-app-static  >=3.1  && <3.2
+    , warp            >=3.3  && <3.5
 
 common opts-test
   ghc-options: -Wall -Werror -Wunused-imports -Wunused-packages -threaded

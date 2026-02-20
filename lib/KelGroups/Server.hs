@@ -87,12 +87,17 @@ data ServerEnv a = ServerEnv
     -- ^ SSE broadcast channel
     }
 
--- | Build a WAI 'Application' from a 'ServerEnv'.
+{- | Build a WAI 'Application' from a 'ServerEnv'.
+Unmatched routes are passed to the optional fallback
+application, or return 404.
+-}
 mkApp
     :: (Serialise a, FromJSON a, ToJSON a)
     => ServerEnv a
+    -> Maybe Application
+    -- ^ Optional fallback for unmatched routes (e.g. static files)
     -> Application
-mkApp env req respond =
+mkApp env mFallback req respond =
     case (requestMethod req, pathInfo req) of
         ("GET", ["condition"]) ->
             handleCondition env req respond
@@ -102,10 +107,12 @@ mkApp env req respond =
             handlePostEvent env req respond
         ("GET", ["stream"]) ->
             handleStream env req respond
-        _ ->
-            respond $
-                jsonResponse status404 $
-                    BadRequest "not found"
+        _ -> case mFallback of
+            Just fallback -> fallback req respond
+            Nothing ->
+                respond $
+                    jsonResponse status404 $
+                        BadRequest "not found"
 
 -- --------------------------------------------------------
 -- GET /condition

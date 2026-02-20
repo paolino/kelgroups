@@ -98,7 +98,7 @@ withTestEnv action = do
     mgr <- HC.newManager HC.defaultManagerSettings
     result <-
         Warp.testWithApplication
-            (pure $ mkApp env)
+            (pure $ mkApp env Nothing)
             (\port -> action TestEnv{tePort = port, teMgr = mgr})
     closeKEL store
     removeFile dbPath

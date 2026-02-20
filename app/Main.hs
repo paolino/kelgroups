@@ -17,6 +17,10 @@ import KelGroups.Trivial
     , trivialFold
     , trivialInitial
     )
+import Network.Wai.Application.Static
+    ( defaultFileServerSettings
+    , staticApp
+    )
 import Network.Wai.Handler.Warp qualified as Warp
 import System.Environment (getArgs)
 
@@ -46,6 +50,12 @@ runServer port dbPath passphrase =
                         , envPassphrase = passphrase
                         , envBroadcast = ch
                         }
+                staticDir =
+                    "client/kelgroups-trivial/dist"
+                fallback =
+                    staticApp
+                        (defaultFileServerSettings staticDir)
+                app = mkApp env (Just fallback)
             putStrLn $
                 "Listening on port " <> show port
-            Warp.run port (mkApp env)
+            Warp.run port app
