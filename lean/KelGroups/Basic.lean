@@ -45,7 +45,7 @@ structure PendingProposal where
 
 /-- Base events for group management. -/
 inductive BaseEvent where
-  | propose : MemberId → Proposal → BaseEvent
+  | propose : MemberId → Nat → Proposal → BaseEvent
   | approve : MemberId → Nat → BaseEvent
   deriving Repr
 
