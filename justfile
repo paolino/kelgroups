@@ -23,7 +23,7 @@ lean:
     cd lean && lake build
 
 # Full CI check
-ci: format cabal-fmt lint build lean
+ci: format cabal-fmt lint build test lean
 
 # Build documentation
 docs:
