@@ -33,8 +33,13 @@
         };
         project =
           import ./nix/project.nix { inherit pkgs keri-hs; };
+        version = self.shortRev or self.dirtyShortRev or "dev";
+        docker-image =
+          import ./nix/docker-image.nix { inherit pkgs project version; };
       in {
-        packages = project.packages;
+        packages = project.packages // {
+          inherit docker-image;
+        };
         devShells = project.devShells;
       });
 }
