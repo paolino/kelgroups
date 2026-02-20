@@ -8,6 +8,9 @@ module Main (main) where
 
 import InvariantsSpec qualified
 import Test.Hspec (hspec)
+import TransitionInvariantsSpec qualified
 
 main :: IO ()
-main = hspec InvariantsSpec.spec
+main = hspec $ do
+    InvariantsSpec.spec
+    TransitionInvariantsSpec.spec

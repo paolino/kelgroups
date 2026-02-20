@@ -13,6 +13,8 @@ module KelGroups.Fold
     ( foldGroup
     , applyEvent
     , AppFold
+    , enact
+    , applyPropose
     ) where
 
 import Data.Map.Strict qualified as Map
