@@ -22,6 +22,10 @@ let
         nixfmt-classic
         python3
         python3Packages.mkdocs-material
+        uv
+        (writeShellScriptBin "haskell-language-server-wrapper" ''
+          exec haskell-language-server "$@"
+        '')
       ];
     };
     # keri-hs source available for when we add the dependency

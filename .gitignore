@@ -4,3 +4,5 @@ result
 WIP.md
 site/
 cabal.project.local
+.direnv/
+lean/.lake/
