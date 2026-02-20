@@ -2,3 +2,6 @@ import KelGroups.Basic
 import KelGroups.Invariants
 import KelGroups.Transitions
 import KelGroups.TransitionInvariants
+import KelGroups.Validate
+import KelGroups.ValidateInvariants
+import KelGroups.FoldInvariants

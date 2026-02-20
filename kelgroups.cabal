@@ -62,12 +62,14 @@ test-suite invariants
   hs-source-dirs: test
   main-is:        Main.hs
   other-modules:
+    FoldSpec
     Generators
     InvariantsSpec
     StoreInvariantsSpec
     StoreSpec
     StoreTestDSL
     TransitionInvariantsSpec
+    ValidateSpec
 
   build-depends:
     , base        >=4.18 && <5

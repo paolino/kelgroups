@@ -26,3 +26,4 @@ nav:
   - Home: index.md
   - Design: design.md
   - Implementation: implementation.md
+  - Properties: properties.md
