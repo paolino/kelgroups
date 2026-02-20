@@ -18,8 +18,12 @@ lint:
 cabal-fmt:
     cabal-fmt -i kelgroups.cabal
 
+# Build Lean proofs
+lean:
+    cd lean && lake build
+
 # Full CI check
-ci: format cabal-fmt lint build
+ci: format cabal-fmt lint build lean
 
 # Build documentation
 docs:
@@ -28,3 +32,4 @@ docs:
 # Clean build artifacts
 clean:
     cabal clean
+    cd lean && lake clean
