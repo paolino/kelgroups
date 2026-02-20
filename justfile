@@ -8,7 +8,7 @@ test:
 
 # Format Haskell sources
 format:
-    fourmolu -i lib/**/*.hs test/*.hs
+    fourmolu -i lib/**/*.hs test/*.hs app/*.hs
 
 # Lint Haskell sources
 lint:
@@ -28,6 +28,10 @@ ci: format cabal-fmt lint build test lean
 # Build documentation
 docs:
     mkdocs build --config-file docs/mkdocs.yml
+
+# Run the server
+serve port="8080" db="kelgroups.db" pass="bootstrap":
+    cabal run kelgroups-server -O0 -- {{port}} {{db}} {{pass}}
 
 # Clean build artifacts
 clean:

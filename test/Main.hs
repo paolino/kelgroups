@@ -6,8 +6,10 @@ License     : Apache-2.0
 -}
 module Main (main) where
 
+import E2ESpec qualified
 import FoldSpec qualified
 import InvariantsSpec qualified
+import ServerSpec qualified
 import StoreInvariantsSpec qualified
 import StoreSpec qualified
 import Test.Hspec (hspec)
@@ -22,3 +24,5 @@ main = hspec $ do
     ValidateSpec.spec
     StoreSpec.spec
     StoreInvariantsSpec.spec
+    ServerSpec.spec
+    E2ESpec.spec
