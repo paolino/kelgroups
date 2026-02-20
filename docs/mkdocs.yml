@@ -25,3 +25,4 @@ extra_javascript:
 nav:
   - Home: index.md
   - Design: design.md
+  - Implementation: implementation.md
