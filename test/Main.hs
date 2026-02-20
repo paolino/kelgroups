@@ -7,6 +7,7 @@ License     : Apache-2.0
 module Main (main) where
 
 import InvariantsSpec qualified
+import StoreSpec qualified
 import Test.Hspec (hspec)
 import TransitionInvariantsSpec qualified
 
@@ -14,3 +15,4 @@ main :: IO ()
 main = hspec $ do
     InvariantsSpec.spec
     TransitionInvariantsSpec.spec
+    StoreSpec.spec
