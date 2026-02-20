@@ -170,7 +170,89 @@ runServer :: AppPlugin a -> Passphrase -> IO ()
 
 For the trivial first instance, `a = Void` (no application events, no application roles).
 
-## 10. Edge Cases
+## 10. HTTP Protocol
+
+The server exposes a minimal HTTP API. No WebSockets — clients use **SSE** for notifications and **HTTP GET** for fetching events.
+
+### Design Principles
+
+- **SSE is notification-only** — carries no event payload, just a signal that new events exist
+- **Clients pull events** — each client tracks its own position in the KEL and requests the next event
+- **One event per request** — `GET` returns exactly the next event after the client's last known sequence number
+- **POST to submit** — clients submit new events (signed or passphrase-authenticated)
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/events?after=N` | Returns event at sequence number N+1. 404 if no such event yet. |
+| `POST` | `/events` | Submit a new signed event. Server validates and appends to KEL. |
+| `GET` | `/stream` | SSE endpoint — sends empty notifications when new events are appended. |
+| `GET` | `/condition` | Returns the current group condition (KEL fold result). |
+
+### Event Retrieval Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    C->>S: GET /stream (SSE)
+    Note over C: Listening for notifications
+
+    C->>S: GET /events?after=-1
+    S-->>C: Event 0 (inception)
+
+    C->>S: GET /events?after=0
+    S-->>C: Event 1
+
+    C->>S: GET /events?after=1
+    S-->>C: 404 (no more events)
+
+    Note over S: Another client submits event 2
+    S-->>C: SSE: "new"
+
+    C->>S: GET /events?after=1
+    S-->>C: Event 2
+```
+
+### Event Submission
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    alt Bootstrap mode
+        C->>S: POST /events {passphrase, event}
+        S->>S: Verify passphrase
+    else Normal mode
+        C->>S: POST /events {signature, event}
+        S->>S: Verify signature
+    end
+
+    S->>S: Validate event against KEL fold
+    S->>S: Append to KEL
+
+    S-->>C: 200 OK {sequenceNumber}
+    S-->>S: Notify all SSE listeners
+```
+
+### SSE Format
+
+The SSE stream sends minimal notifications:
+
+```
+event: new
+data: {"sn": 5}
+
+event: new
+data: {"sn": 6}
+```
+
+The `sn` field tells the client which sequence number is now available, so it can decide whether to fetch.
+
+## 11. Edge Cases
 
 | Scenario | Behavior |
 |---|---|
