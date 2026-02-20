@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 {- |
 Module      : InvariantsSpec
 Description : QuickCheck properties mirroring Lean invariants
@@ -14,8 +12,11 @@ test that the Haskell implementation matches.
 module InvariantsSpec (spec) where
 
 import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
-import Data.Text (Text, pack)
+import Generators
+    ( arbitraryGroupState
+    , arbitraryWithAdmin
+    , gsWithAdminCount
+    )
 import KelGroups.Bootstrap
     ( AuthMode (..)
     , authMode
@@ -25,62 +26,12 @@ import KelGroups.State
     , adminCount
     , majority
     )
-import KelGroups.Types (Member (..), Role (..))
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck
     ( Arbitrary (..)
-    , Gen
     , NonNegative (..)
-    , chooseInt
-    , listOf
-    , oneof
-    , suchThat
-    , vectorOf
     )
-
--- --------------------------------------------------------
--- Arbitrary instances
--- --------------------------------------------------------
-
-instance Arbitrary Role where
-    arbitrary :: Gen Role
-    arbitrary =
-        oneof
-            [ pure Admin
-            , AppRole . pack . ("role" <>) . show
-                <$> chooseInt (0, 9)
-            ]
-
-instance Arbitrary Member where
-    arbitrary :: Gen Member
-    arbitrary = do
-        key <-
-            pack . ("key" <>) . show
-                <$> chooseInt (0, 99)
-        roles <- Set.fromList <$> listOf arbitrary
-        pure Member{memberKey = key, memberRoles = roles}
-
--- | Generate a GroupState () with random members.
-arbitraryGroupState :: Gen (GroupState ())
-arbitraryGroupState = do
-    n <- chooseInt (0, 10)
-    ms <- vectorOf n arbitrary
-    let memberMap =
-            Map.fromList
-                [(memberKey m, m) | m <- ms]
-    pure
-        GroupState
-            { members = memberMap
-            , pendingProposals = Map.empty
-            , appFold = ()
-            }
-
--- | Generate a GroupState that has at least one admin.
-arbitraryWithAdmin :: Gen (GroupState ())
-arbitraryWithAdmin =
-    arbitraryGroupState `suchThat` \gs ->
-        adminCount gs > 0
 
 -- --------------------------------------------------------
 -- Specs
@@ -188,27 +139,3 @@ emptyState' _ =
         , pendingProposals = Map.empty
         , appFold = ()
         }
-
-{- | Build a GroupState with exactly @n@ admin members.
-Used to test majority properties directly.
--}
-gsWithAdminCount :: Int -> GroupState ()
-gsWithAdminCount n =
-    GroupState
-        { members =
-            Map.fromList
-                [ (key i, adminMember (key i))
-                | i <- [1 .. n]
-                ]
-        , pendingProposals = Map.empty
-        , appFold = ()
-        }
-  where
-    key :: Int -> Text
-    key i = "admin" <> pack (show i)
-    adminMember :: Text -> Member
-    adminMember k =
-        Member
-            { memberKey = k
-            , memberRoles = Set.singleton Admin
-            }

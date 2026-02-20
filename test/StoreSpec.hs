@@ -1,27 +1,24 @@
 {- |
 Module      : StoreSpec
-Description : SQLite KEL store properties
+Description : SQLite KEL store mechanics properties
 Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 Monadic QuickCheck properties testing the SQLite-backed
-KEL store through real disk I/O.
+KEL store through real disk I/O. Covers roundtrip, fold
+consistency, readEventsFrom, and kelLength.
 -}
 module StoreSpec (spec) where
 
 import Control.Monad (forM_)
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
-import KelGroups.Bootstrap (AuthMode (..), authMode)
 import KelGroups.Event
     ( BaseEvent (..)
     , GroupEvent (..)
     , Proposal (..)
     )
-import KelGroups.State
-    ( adminCount
-    , emptyState
-    )
+import KelGroups.State (emptyState)
 import KelGroups.Store
     ( appendEvent
     , closeKEL
@@ -46,7 +43,12 @@ import Test.QuickCheck
     , listOf1
     , oneof
     )
-import Test.QuickCheck.Monadic (assert, monadicIO, pick, run)
+import Test.QuickCheck.Monadic
+    ( assert
+    , monadicIO
+    , pick
+    , run
+    )
 
 -- --------------------------------------------------------
 -- Helpers
@@ -69,7 +71,6 @@ bootstrap proposals first, then normal operations.
 -}
 arbitraryBaseEvents :: Gen [(Text, GroupEvent ())]
 arbitraryBaseEvents = do
-    -- Start with a bootstrap introduce (always valid)
     bootstrapKey <- arbitraryKey
     let bootstrapEvt =
             ( "bootstrap"
@@ -79,7 +80,6 @@ arbitraryBaseEvents = do
                         bootstrapKey
                         (Set.singleton Admin)
             )
-    -- Then some more proposals from the introduced admin
     rest <- listOf1 $ do
         key <- arbitraryKey
         evt <-
@@ -143,7 +143,6 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                 events <- pick arbitraryBaseEvents
                 (stateIncremental, stateReplayed) <- run $
                     withTempKEL $ \path -> do
-                        -- Append one by one
                         store <-
                             openKEL
                                 trivialFold
@@ -155,7 +154,6 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 trivialFold
                         gs1 <- readState store
                         closeKEL store
-                        -- Reopen and let openKEL replay
                         store2 <-
                             openKEL
                                 trivialFold
@@ -239,26 +237,3 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                         closeKEL store
                         pure l
                 assert $ len == length events
-
-    describe "invariant preservation through store" $ do
-        it
-            "bootstrap event through store exits bootstrap"
-            $ withTempKEL
-            $ \path -> do
-                store <-
-                    openKEL
-                        trivialFold
-                        trivialInitial
-                        path
-                appendEvent store trivialFold $
-                    ( "bootstrap"
-                    , Base $
-                        Propose $
-                            IntroduceMember
-                                "admin1"
-                                (Set.singleton Admin)
-                    )
-                gs <- readState store
-                closeKEL store
-                authMode gs `shouldBe` Normal
-                adminCount gs `shouldBe` 1
