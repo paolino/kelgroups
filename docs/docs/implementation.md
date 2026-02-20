@@ -8,10 +8,11 @@
 
 ## Cabal Package
 
-**`kelgroups.cabal`** — library + test suite:
+**`kelgroups.cabal`** — library + test suite + executable:
 
-- Library depends on `base`, `containers`, `text`, `bytestring`, `serialise`, `sqlite-simple`, `stm`
-- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory`
+- Library depends on `base`, `containers`, `text`, `bytestring`, `serialise`, `sqlite-simple`, `stm`, `aeson`, `http-types`, `wai`
+- Executable depends on `kelgroups`, `warp`, `stm`, `text`
+- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm`
 - `keri-hs` dependency wired in nix, activated when needed
 
 ## Library Modules
@@ -27,6 +28,8 @@
 | `KelGroups.Trivial` | Trivial instance: `a = ()`, no app roles |
 | `KelGroups.Store` | SQLite-backed KEL store with incremental TVar state |
 | `KelGroups.Store.Serialise` | Orphan CBOR `Serialise` instances for all event/state types |
+| `KelGroups.Server` | WAI application: routing, handlers, SSE streaming |
+| `KelGroups.Server.JSON` | Orphan `ToJSON`/`FromJSON` instances + HTTP types (`Submission`, `AppendResult`, `ServerError`) |
 
 ### Type Sketch
 
@@ -114,6 +117,25 @@ kelLength :: KELStore a -> IO Int
 
 Events are CBOR-encoded (`serialise`) and stored as blobs in a SQLite table. The in-memory `TVar` state is updated incrementally on each append and rebuilt from the DB on `openKEL`.
 
+### Server
+
+HTTP interface via warp + wai with JSON encoding (aeson).
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/condition` | GET | Current group state + auth mode |
+| `/events?after=N` | GET | First event after sequence number N |
+| `/events` | POST | Submit a `Submission` (passphrase + signer + event) |
+| `/stream` | GET | SSE stream — emits `event: new` with `{"sn":N}` on each append |
+
+**SSE mechanism:** Each client gets a `dupTChan` copy of the broadcast channel. Disconnection is handled by warp (thread dies, TChan is GC'd).
+
+**POST flow:** Parse JSON → check auth mode (bootstrap requires passphrase, normal accepts signer) → validate event → append to store → broadcast sequence number → respond with `AppendResult`.
+
+**Error codes:** 400 (bad JSON), 401 (wrong/missing passphrase), 404 (unknown route or no event), 422 (validation error).
+
+**Executable:** `kelgroups-server <port> <db-path> <passphrase>` — opens a SQLite KEL, creates broadcast channel, runs warp.
+
 ## Lean 4 Proofs
 
 Invariants proven in `lean/KelGroups/Invariants.lean`:
@@ -149,8 +171,9 @@ Three tiers of properties mirror the Lean theorems:
 | `TransitionInvariantsSpec` | Pure transition invariants | 8 |
 | `StoreSpec` | Store mechanics (roundtrip, fold consistency, readEventsFrom, kelLength) | 6 |
 | `StoreInvariantsSpec` | Lean invariants through CBOR + SQLite roundtrip | 13 |
+| `ServerSpec` | HTTP endpoints, SSE, auth, validation errors | 11 |
 
-**Total: 38 tests.**
+**Total: 49 tests.**
 
 ### Store-through DSL
 
@@ -180,10 +203,11 @@ The `arbitraryHistory` generator produces valid event histories by tracking stat
 |---|---|
 | `build` | `cabal build all -O0` |
 | `test` | `cabal test all -O0 --test-show-details=direct` |
-| `format` | `fourmolu -i lib/**/*.hs test/*.hs` |
+| `format` | `fourmolu -i lib/**/*.hs test/*.hs app/*.hs` |
 | `lint` | `hlint lib/` |
 | `cabal-fmt` | `cabal-fmt -i kelgroups.cabal` |
 | `lean` | `cd lean && lake build` |
 | `ci` | format + cabal-fmt + lint + build + test + lean |
 | `docs` | `mkdocs build` |
+| `serve` | `cabal run kelgroups-server -O0 -- <port> <db> <pass>` |
 | `clean` | cabal clean + lake clean |

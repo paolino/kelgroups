@@ -37,6 +37,8 @@ library
     KelGroups.Bootstrap
     KelGroups.Event
     KelGroups.Fold
+    KelGroups.Server
+    KelGroups.Server.JSON
     KelGroups.State
     KelGroups.Store
     KelGroups.Store.Serialise
@@ -45,16 +47,30 @@ library
     KelGroups.Validate
 
   build-depends:
+    , aeson          >=2.1  && <2.3
     , base           >=4.18 && <5
     , bytestring     >=0.11 && <0.13
     , containers     >=0.6  && <0.8
+    , http-types     >=0.12 && <0.13
     , serialise      >=0.2  && <0.3
     , sqlite-simple  >=0.4  && <0.5
     , stm            >=2.5  && <2.7
     , text           >=2.0  && <2.2
+    , wai            >=3.2  && <3.3
+
+executable kelgroups-server
+  import:         language, opts-lib
+  hs-source-dirs: app
+  main-is:        Main.hs
+  build-depends:
+    , base       >=4.18 && <5
+    , kelgroups
+    , stm        >=2.5  && <2.7
+    , text       >=2.0  && <2.2
+    , warp       >=3.3  && <3.5
 
 common opts-test
-  ghc-options: -Wall -Werror -Wunused-imports -Wunused-packages
+  ghc-options: -Wall -Werror -Wunused-imports -Wunused-packages -threaded
 
 test-suite invariants
   import:         language, opts-test
@@ -62,9 +78,11 @@ test-suite invariants
   hs-source-dirs: test
   main-is:        Main.hs
   other-modules:
+    E2ESpec
     FoldSpec
     Generators
     InvariantsSpec
+    ServerSpec
     StoreInvariantsSpec
     StoreSpec
     StoreTestDSL
@@ -72,11 +90,18 @@ test-suite invariants
     ValidateSpec
 
   build-depends:
-    , base        >=4.18 && <5
-    , containers  >=0.6  && <0.8
-    , directory   >=1.3  && <1.4
-    , hspec       >=2.11 && <2.12
+    , aeson        >=2.1  && <2.3
+    , async        >=2.2  && <2.3
+    , base         >=4.18 && <5
+    , bytestring   >=0.11 && <0.13
+    , containers   >=0.6  && <0.8
+    , directory    >=1.3  && <1.4
+    , hspec        >=2.11 && <2.12
+    , http-client  >=0.7  && <0.8
+    , http-types   >=0.12 && <0.13
     , kelgroups
-    , QuickCheck  >=2.14 && <2.16
-    , temporary   >=1.3  && <1.4
-    , text        >=2.0  && <2.2
+    , QuickCheck   >=2.14 && <2.16
+    , stm          >=2.5  && <2.7
+    , temporary    >=1.3  && <1.4
+    , text         >=2.0  && <2.2
+    , warp         >=3.3  && <3.5
