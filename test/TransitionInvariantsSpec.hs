@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 {- |
 Module      : TransitionInvariantsSpec
 Description : QuickCheck properties mirroring Lean transition invariants
@@ -14,8 +12,14 @@ test that the Haskell implementation matches.
 module TransitionInvariantsSpec (spec) where
 
 import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
-import Data.Text (Text, pack)
+import Generators
+    ( arbitraryAdminRoles
+    , arbitraryGroupState
+    , arbitraryKey
+    , arbitraryNonAdminRoles
+    , arbitraryWithTwoAdmins
+    , gsWithAdminCount
+    )
 import KelGroups.Event (Proposal (..))
 import KelGroups.Fold
     ( AppFold
@@ -28,114 +32,13 @@ import KelGroups.State
     , adminCount
     , emptyState
     )
-import KelGroups.Types (Member (..), Role (..))
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck
     ( Arbitrary (..)
-    , Gen
-    , chooseInt
     , elements
-    , listOf
-    , oneof
     , suchThat
-    , vectorOf
     )
-
--- --------------------------------------------------------
--- Arbitrary instances
--- --------------------------------------------------------
-
-instance Arbitrary Role where
-    arbitrary :: Gen Role
-    arbitrary =
-        oneof
-            [ pure Admin
-            , AppRole . pack . ("role" <>) . show
-                <$> chooseInt (0, 9)
-            ]
-
-instance Arbitrary Proposal where
-    arbitrary :: Gen Proposal
-    arbitrary = do
-        key <- arbitraryKey
-        oneof
-            [ IntroduceMember key . Set.fromList
-                <$> listOf arbitrary
-            , pure $ RemoveMember key
-            , ChangeRoles key . Set.fromList
-                <$> listOf arbitrary
-            ]
-
-instance Arbitrary Member where
-    arbitrary :: Gen Member
-    arbitrary = do
-        key <- arbitraryKey
-        roles <- Set.fromList <$> listOf arbitrary
-        pure Member{memberKey = key, memberRoles = roles}
-
-arbitraryKey :: Gen Text
-arbitraryKey =
-    pack . ("key" <>) . show <$> chooseInt (0, 99)
-
--- | Generate a GroupState () with random members.
-arbitraryGroupState :: Gen (GroupState ())
-arbitraryGroupState = do
-    n <- chooseInt (0, 10)
-    ms <- vectorOf n arbitrary
-    let memberMap =
-            Map.fromList
-                [(memberKey m, m) | m <- ms]
-    pure
-        GroupState
-            { members = memberMap
-            , pendingProposals = Map.empty
-            , appFold = ()
-            }
-
--- | Generate a GroupState with at least 2 admins.
-arbitraryWithTwoAdmins :: Gen (GroupState ())
-arbitraryWithTwoAdmins =
-    arbitraryGroupState `suchThat` \gs ->
-        adminCount gs >= 2
-
--- | An admin-bearing role set (always contains Admin).
-arbitraryAdminRoles :: Gen (Set.Set Role)
-arbitraryAdminRoles = do
-    extras <- listOf arbitrary
-    pure $ Set.insert Admin (Set.fromList extras)
-
--- | A non-admin role set (never contains Admin).
-arbitraryNonAdminRoles :: Gen (Set.Set Role)
-arbitraryNonAdminRoles = do
-    n <- chooseInt (0, 5)
-    roles <-
-        vectorOf n $
-            AppRole . pack . ("role" <>) . show
-                <$> chooseInt (0, 9)
-    pure $ Set.fromList roles
-
--- | Build a GroupState with exactly @n@ admin members.
-gsWithAdminCount :: Int -> GroupState ()
-gsWithAdminCount n =
-    GroupState
-        { members =
-            Map.fromList
-                [ (key i, adminMember (key i))
-                | i <- [1 .. n]
-                ]
-        , pendingProposals = Map.empty
-        , appFold = ()
-        }
-  where
-    key :: Int -> Text
-    key i = "admin" <> pack (show i)
-    adminMember :: Text -> Member
-    adminMember k =
-        Member
-            { memberKey = k
-            , memberRoles = Set.singleton Admin
-            }
 
 -- | Trivial app fold for testing.
 trivialAppFold :: AppFold ()

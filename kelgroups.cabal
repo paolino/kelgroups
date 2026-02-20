@@ -62,8 +62,11 @@ test-suite invariants
   hs-source-dirs: test
   main-is:        Main.hs
   other-modules:
+    Generators
     InvariantsSpec
+    StoreInvariantsSpec
     StoreSpec
+    StoreTestDSL
     TransitionInvariantsSpec
 
   build-depends:
