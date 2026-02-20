@@ -1,0 +1,49 @@
+cabal-version:   3.0
+name:            kelgroups
+version:         0.1.0.0
+synopsis:        KEL-based group management library
+description:
+  A polymorphic Haskell library for managing groups via
+  a Key Event Log (KEL). Provides member management,
+  role-based access control with admin majority voting,
+  and bootstrap mode with passphrase authentication.
+
+license:         Apache-2.0
+license-file:    LICENSE
+copyright:       (c) 2026 Paolo Veronelli
+author:          Paolo Veronelli
+maintainer:      paolo.veronelli@gmail.com
+category:        Cryptography
+build-type:      Simple
+extra-doc-files: README.md
+
+common language
+  default-language:   GHC2021
+  default-extensions:
+    DerivingStrategies
+    LambdaCase
+    OverloadedStrings
+    StrictData
+
+common opts-lib
+  ghc-options:
+    -Wall -Werror -Wunused-imports -Wunused-packages
+    -Wmissing-export-lists -Wname-shadowing
+    -Wredundant-constraints
+
+library
+  import:          language, opts-lib
+  hs-source-dirs:  lib
+  exposed-modules:
+    KelGroups.Bootstrap
+    KelGroups.Event
+    KelGroups.Fold
+    KelGroups.State
+    KelGroups.Trivial
+    KelGroups.Types
+    KelGroups.Validate
+
+  build-depends:
+    , base        >=4.18 && <5
+    , containers  >=0.6  && <0.8
+    , text        >=2.0  && <2.2

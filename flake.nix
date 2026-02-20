@@ -1,19 +1,32 @@
 {
   description = "kelgroups — KEL-based group management library";
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+  nixConfig = {
+    extra-substituters = [ "https://cache.iog.io" ];
+    extra-trusted-public-keys =
+      [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
   };
-  outputs = { self, nixpkgs, flake-utils }:
+  inputs = {
+    haskellNix.url = "github:input-output-hk/haskell.nix";
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    flake-utils.url =
+      "github:hamishmack/flake-utils/hkm/nested-hydraJobs";
+    keri-hs = {
+      url = "github:paolino/keri-hs";
+      flake = false;
+    };
+  };
+  outputs =
+    { self, nixpkgs, flake-utils, haskellNix, keri-hs, ... }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
-        pkgs = import nixpkgs { inherit system; };
-      in {
-        devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            python3
-            python3Packages.mkdocs-material
-          ];
+        pkgs = import nixpkgs {
+          overlays = [ haskellNix.overlay ];
+          inherit system;
         };
+        project =
+          import ./nix/project.nix { inherit pkgs keri-hs; };
+      in {
+        packages = project.packages;
+        devShells = project.devShells;
       });
 }
