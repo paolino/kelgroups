@@ -3,3 +3,4 @@ result
 .llm/
 WIP.md
 site/
+cabal.project.local
