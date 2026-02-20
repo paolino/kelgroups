@@ -16,3 +16,4 @@ kelgroups provides the infrastructure layer for managing groups via a Key Event 
 ## Documentation
 
 - [Design Document](design.md) — system invariants, base events, bootstrap mode, architecture
+- [Implementation Plan](implementation.md) — modules, types, store, Lean proofs, QuickCheck properties
