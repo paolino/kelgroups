@@ -13,24 +13,40 @@ specs alike.
 module Generators
     ( arbitraryKey
     , freshKey
+    , existingKey
+    , adminKey
+    , nonAdminMemberKey
     , arbitraryGroupState
     , arbitraryWithAdmin
     , arbitraryWithTwoAdmins
+    , arbitraryWithNonAdmin
+    , arbitraryWithPending
     , arbitraryAdminRoles
     , arbitraryNonAdminRoles
     , gsWithAdminCount
+    , trivialConfig
     ) where
 
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import KelGroups.Event (Proposal (..))
-import KelGroups.State (GroupState (..), adminCount)
-import KelGroups.Types (Member (..), Role (..))
+import KelGroups.State
+    ( GroupState (..)
+    , PendingProposal (..)
+    , adminCount
+    , isAdmin
+    )
+import KelGroups.Types
+    ( GroupConfig (..)
+    , Member (..)
+    , Role (..)
+    )
 import Test.QuickCheck
     ( Arbitrary (..)
     , Gen
     , chooseInt
+    , elements
     , listOf
     , oneof
     , suchThat
@@ -154,3 +170,63 @@ gsWithAdminCount n =
             { memberKey = k
             , memberRoles = Set.singleton Admin
             }
+
+-- | Pick an existing member key from a group state.
+existingKey :: GroupState () -> Gen Text
+existingKey gs = elements $ Map.keys (members gs)
+
+-- | Pick an admin key from a group state.
+adminKey :: GroupState () -> Gen Text
+adminKey gs =
+    elements
+        [ k
+        | k <- Map.keys (members gs)
+        , isAdmin k gs
+        ]
+
+{- | Pick a non-admin member key from a group state.
+Requires at least one non-admin member.
+-}
+nonAdminMemberKey :: GroupState () -> Gen Text
+nonAdminMemberKey gs =
+    elements
+        [ k
+        | k <- Map.keys (members gs)
+        , not $ isAdmin k gs
+        ]
+
+{- | GroupState with at least one admin and at least
+one non-admin member.
+-}
+arbitraryWithNonAdmin :: Gen (GroupState ())
+arbitraryWithNonAdmin =
+    arbitraryGroupState `suchThat` \gs ->
+        adminCount gs > 0
+            && Map.size (members gs)
+                > adminCount gs
+
+{- | GroupState with at least one admin and at least
+one pending proposal.
+-}
+arbitraryWithPending :: Gen (GroupState ())
+arbitraryWithPending = do
+    gs <- arbitraryWithAdmin
+    pid <- arbitraryKey
+    signer <- adminKey gs
+    proposal' <- arbitrary
+    pure
+        gs
+            { pendingProposals =
+                Map.singleton
+                    pid
+                    PendingProposal
+                        { proposal = proposal'
+                        , proposer = signer
+                        , approvals =
+                            Set.singleton signer
+                        }
+            }
+
+-- | Trivial group config with no role defs.
+trivialConfig :: GroupConfig ()
+trivialConfig = GroupConfig{roleDefs = Map.empty}
