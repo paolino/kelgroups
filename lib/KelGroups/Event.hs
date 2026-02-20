@@ -49,8 +49,10 @@ data Proposal
       IntroduceMember
         Text
         -- ^ CESR-encoded public key
+        Text
+        -- ^ Email address
         (Set Role)
-        -- ^ Initial roles (must include 'Admin' during bootstrap)
+        -- ^ Initial roles (must include admin during bootstrap)
     | -- | Remove a member entirely
       RemoveMember
         Text

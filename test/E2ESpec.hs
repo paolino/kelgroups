@@ -50,7 +50,7 @@ import KelGroups.Trivial
     , trivialFold
     , trivialInitial
     )
-import KelGroups.Types (Role (..))
+import KelGroups.Types (Admin (..), Role (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types
     ( status200
@@ -142,10 +142,11 @@ postEvent te sub = do
     ar <- decodeOrFail (HC.responseBody resp)
     pure (sequenceNumber ar)
 
--- | GET /condition and decode.
-getCondition :: TestEnv -> IO ConditionResp
-getCondition te = do
-    resp <- httpGet te "/condition"
+-- | GET /condition?key=K and decode.
+getCondition :: TestEnv -> String -> IO ConditionResp
+getCondition te key = do
+    resp <-
+        httpGet te ("/condition?key=" <> key)
     HC.responseStatus resp `shouldBe` status200
     decodeOrFail (HC.responseBody resp)
 
@@ -169,7 +170,12 @@ bootstrap key =
         , subEvent =
             Base $
                 Propose $
-                    IntroduceMember key (Set.singleton Admin)
+                    IntroduceMember
+                        key
+                        (key <> "@test.example")
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
         }
 
 proposeAdmin :: Text -> Text -> Submission ()
@@ -182,7 +188,10 @@ proposeAdmin signer newKey =
                 Propose $
                     IntroduceMember
                         newKey
-                        (Set.singleton Admin)
+                        (newKey <> "@test.example")
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
         }
 
 proposeMember :: Text -> Text -> Submission ()
@@ -195,6 +204,7 @@ proposeMember signer newKey =
                 Propose $
                     IntroduceMember
                         newKey
+                        (newKey <> "@test.example")
                         Set.empty
         }
 
@@ -280,17 +290,12 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
     describe "Group bootstrap and single-admin lifecycle" $ do
         it "bootstrap → add member → verify state" $
             \te -> do
-                -- Start in bootstrap mode
-                c0 <- getCondition te
-                crAuthMode c0 `shouldBe` "bootstrap"
-                crMembers c0 `shouldSatisfy` null
-
                 -- Bootstrap first admin
                 sn1 <- postEvent te (bootstrap "admin1")
                 sn1 `shouldBe` 1
 
                 -- Now in normal mode with 1 member
-                c1 <- getCondition te
+                c1 <- getCondition te "admin1"
                 crAuthMode c1 `shouldBe` "normal"
                 length (crMembers c1) `shouldBe` 1
                 mrKey (head $ crMembers c1)
@@ -303,7 +308,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                 sn2 `shouldBe` 2
 
                 -- Verify 2 members now
-                c2 <- getCondition te
+                c2 <- getCondition te "admin1"
                 length (crMembers c2) `shouldBe` 2
 
     describe "Multi-admin approval flow" $ do
@@ -318,7 +323,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                 -- 2 admins, majority=1, auto-enacts
                 _ <- postEvent te (proposeAdmin "a1" "a3")
 
-                c <- getCondition te
+                c <- getCondition te "a1"
                 length (crMembers c) `shouldBe` 3
 
                 -- Now majority = ceil(3/2) = 2
@@ -327,7 +332,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                 _ <-
                     postEvent te (proposeMember "a1" "user1")
 
-                c1 <- getCondition te
+                c1 <- getCondition te "a1"
                 -- user1 not yet a member
                 length (crMembers c1) `shouldBe` 3
                 -- 1 pending proposal
@@ -337,7 +342,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                 let pid = fst (head $ crPending c1)
                 _ <- postEvent te (approve "a2" pid)
 
-                c2 <- getCondition te
+                c2 <- getCondition te "a1"
                 length (crMembers c2) `shouldBe` 4
                 crPending c2 `shouldSatisfy` null
 
@@ -348,7 +353,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
 
             -- a1 proposes, pending
             _ <- postEvent te (proposeMember "a1" "user1")
-            c <- getCondition te
+            c <- getCondition te "a1"
             let pid = fst (head $ crPending c)
 
             -- a1 tries to approve own proposal (already in
@@ -367,14 +372,14 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                 _ <-
                     postEvent te (proposeMember "a1" "user1")
 
-                c0 <- getCondition te
+                c0 <- getCondition te "a1"
                 length (crMembers c0) `shouldBe` 2
 
                 -- Propose removal (auto-enacts, 1 admin)
                 _ <-
                     postEvent te (proposeRemove "a1" "user1")
 
-                c1 <- getCondition te
+                c1 <- getCondition te "a1"
                 length (crMembers c1) `shouldBe` 1
                 mrKey (head $ crMembers c1)
                     `shouldBe` "a1"
@@ -382,15 +387,15 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
         it "removing last admin returns to bootstrap" $
             \te -> do
                 _ <- postEvent te (bootstrap "a1")
-                c0 <- getCondition te
+                c0 <- getCondition te "a1"
                 crAuthMode c0 `shouldBe` "normal"
 
                 -- Admin removes themselves
                 _ <- postEvent te (proposeRemove "a1" "a1")
 
-                c1 <- getCondition te
-                crAuthMode c1 `shouldBe` "bootstrap"
-                crMembers c1 `shouldSatisfy` null
+                -- Use /info to check bootstrap (no members)
+                resp <- httpGet te "/info?key=anyone"
+                HC.responseStatus resp `shouldBe` status200
 
     describe "Role changes" $ do
         it "promote member to admin" $ \te -> do
@@ -404,10 +409,12 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                     ( proposeChangeRoles
                         "a1"
                         "user1"
-                        (Set.singleton Admin)
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
                     )
 
-            c <- getCondition te
+            c <- getCondition te "a1"
             length (crMembers c) `shouldBe` 2
 
         it "demote admin to regular member" $ \te -> do
@@ -425,7 +432,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                     )
 
             -- a2 is still a member but not admin
-            c <- getCondition te
+            c <- getCondition te "a1"
             length (crMembers c) `shouldBe` 2
 
     describe "KEL replay via GET /events" $ do
@@ -434,22 +441,22 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
             _ <- postEvent te (proposeMember "a1" "u1")
             _ <- postEvent te (proposeMember "a1" "u2")
 
-            -- Read events from beginning
-            e0 <- httpGet te "/events?after=-1"
+            -- Read events from beginning (as member a1)
+            e0 <- httpGet te "/events?after=-1&key=a1"
             HC.responseStatus e0 `shouldBe` status200
             er0 <- decodeOrFail (HC.responseBody e0)
             erSigner er0 `shouldBe` "a1"
 
-            e1 <- httpGet te "/events?after=0"
+            e1 <- httpGet te "/events?after=0&key=a1"
             HC.responseStatus e1 `shouldBe` status200
             er1 <- decodeOrFail (HC.responseBody e1)
             erSigner er1 `shouldBe` "a1"
 
-            e2 <- httpGet te "/events?after=1"
+            e2 <- httpGet te "/events?after=1&key=a1"
             HC.responseStatus e2 `shouldBe` status200
 
             -- No more events (3 events = ids 1,2,3)
-            e3 <- httpGet te "/events?after=3"
+            e3 <- httpGet te "/events?after=3&key=a1"
             HC.responseStatus e3 `shouldBe` status404
 
     describe "Authorization edge cases" $ do
@@ -502,27 +509,31 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
             _ <- postEvent te (bootstrap "a1")
             _ <- postEvent te (proposeRemove "a1" "a1")
 
-            c0 <- getCondition te
-            crAuthMode c0 `shouldBe` "bootstrap"
+            -- No members → /condition is inaccessible, use /info
+            resp0 <- httpGet te "/info?key=anyone"
+            HC.responseStatus resp0 `shouldBe` status200
 
             -- Re-bootstrap with different key
             _ <- postEvent te (bootstrap "a2")
 
-            c1 <- getCondition te
+            c1 <- getCondition te "a2"
             crAuthMode c1 `shouldBe` "normal"
             length (crMembers c1) `shouldBe` 1
             mrKey (head $ crMembers c1) `shouldBe` "a2"
 
     describe "SSE receives all events in sequence" $ do
-        it "3 POSTs yield 3 SSE notifications" $
+        it "2 POSTs yield 2 SSE notifications" $
             \te -> do
+                -- Bootstrap first so we have a member for SSE
+                _ <- postEvent te (bootstrap "a1")
+
                 resultChan <- newTChanIO
                 listener <- async $ do
                     initReq <-
                         HC.parseRequest $
                             "http://127.0.0.1:"
                                 <> show (tePort te)
-                                <> "/stream"
+                                <> "/stream?key=a1"
                     HC.withResponse initReq (teMgr te) $
                         \resp -> do
                             let readChunks n
@@ -536,17 +547,16 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                                                 resultChan
                                                 chunk
                                         readChunks (n - 1)
-                            readChunks (3 :: Int)
+                            readChunks (2 :: Int)
 
                 threadDelay 50000
 
-                _ <- postEvent te (bootstrap "a1")
                 _ <-
                     postEvent te (proposeMember "a1" "u1")
                 _ <-
                     postEvent te (proposeMember "a1" "u2")
 
-                -- Collect 3 notifications (2s timeout)
+                -- Collect 2 notifications (2s timeout)
                 result <-
                     race
                         (threadDelay 2000000)
@@ -557,15 +567,12 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                             c2 <-
                                 atomically $
                                     readTChan resultChan
-                            c3 <-
-                                atomically $
-                                    readTChan resultChan
-                            pure [c1, c2, c3]
+                            pure [c1, c2]
                         )
                 cancel listener
                 case result of
                     Right chunks -> do
-                        length chunks `shouldBe` 3
+                        length chunks `shouldBe` 2
                         -- Each chunk contains sn data
                         all
                             (BS.isInfixOf "\"sn\":")

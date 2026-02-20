@@ -34,12 +34,13 @@ import Keri.Cesr.Encode as Cesr
 import Keri.Cesr.Primitive (mkPrimitive)
 import KelGroups.Client.Codec
   ( decodeGroupEvent
+  , decodeInfoResponse
   , encodeSubmission
   )
 import KelGroups.Client.Event (BaseEvent(..), GroupEvent(..), Proposal(..))
 import KelGroups.Client.Fold (applyEvent)
 import KelGroups.Client.State (GroupState, emptyState, adminCount)
-import KelGroups.Client.Types (Role(..))
+import KelGroups.Client.Types (Admin(..), Role(..))
 import Type.Proxy (Proxy(..))
 import View.Bootstrap as Bootstrap
 import View.Members as Members
@@ -50,9 +51,15 @@ type Identity =
   , prefix :: String
   }
 
+type InfoResponse =
+  { publicAdminEmails :: Array String
+  , pendingIntroduction :: Boolean
+  }
+
 data Screen
   = IdentityScreen
   | BootstrapScreen
+  | NonMemberScreen InfoResponse
   | NormalScreen
 
 type State =
@@ -71,6 +78,8 @@ data Action
   | HandleMembers Members.Output
   | HandleProposals Proposals.Output
   | SSEMessage String
+  | CopyKey
+  | ResetIdentity
   | Dismiss
 
 type Slots =
@@ -119,7 +128,18 @@ header st = HH.nav [ HP.class_ (HH.ClassName "header") ]
   , case st.identity of
       Just ident -> HH.span
         [ HP.class_ (HH.ClassName "user-id") ]
-        [ HH.text (take8 ident.prefix) ]
+        [ HH.text (take8 ident.prefix)
+        , HH.button
+            [ HE.onClick (const CopyKey)
+            , HP.class_ (HH.ClassName "btn-copy")
+            ]
+            [ HH.text "Copy" ]
+        , HH.button
+            [ HE.onClick (const ResetIdentity)
+            , HP.class_ (HH.ClassName "btn-reset")
+            ]
+            [ HH.text "Reset" ]
+        ]
       Nothing -> HH.text ""
   ]
   where
@@ -143,8 +163,34 @@ content st = case st.screen of
   BootstrapScreen ->
     HH.slot (Proxy :: _ "bootstrap") unit
       Bootstrap.bootstrapComponent
-      unit
+      (map _.prefix st.identity)
       HandleBootstrap
+
+  NonMemberScreen info ->
+    HH.div [ HP.class_ (HH.ClassName "non-member-screen") ]
+      [ HH.h2_ [ HH.text "Not a member yet" ]
+      , if info.pendingIntroduction then
+          HH.p [ HP.class_ (HH.ClassName "pending-notice") ]
+            [ HH.text
+                "Your introduction is pending approval. \
+                \Please wait for admin majority."
+            ]
+        else HH.text ""
+      , if info.publicAdminEmails /= [] then
+          HH.div_
+            [ HH.p_ [ HH.text "Contact an admin to request introduction:" ]
+            , HH.ul_ $ map (\email ->
+                HH.li_ [ HH.text email ]
+              ) info.publicAdminEmails
+            ]
+        else if not info.pendingIntroduction then
+          HH.p_
+            [ HH.text
+                "No public admins found. Ask someone with \
+                \access to introduce you."
+            ]
+        else HH.text ""
+      ]
 
   NormalScreen ->
     HH.div_
@@ -176,11 +222,9 @@ handleAction = case _ of
     case mPrefix of
       Just prefix -> do
         kp <- liftEffect NaCl.generateKeyPair
-        -- Regenerate keypair but use stored prefix
         let ident = { keyPair: kp, prefix }
         H.modify_ _ { identity = Just ident }
-        fetchAndReplay
-        startSSE
+        checkMembershipAndLoad prefix
       Nothing -> pure unit
 
   GenerateIdentity -> do
@@ -194,15 +238,22 @@ handleAction = case _ of
           ident = { keyPair: kp, prefix }
         liftEffect $ Storage.setItem "kelgroups-prefix" prefix
         H.modify_ _ { identity = Just ident, error = Nothing }
-        fetchAndReplay
-        startSSE
+        checkMembershipAndLoad prefix
 
   HandleBootstrap output -> case output of
-    Bootstrap.Submit passphrase key -> do
+    Bootstrap.Submit passphrase key email -> do
       submitEvent
         (Just passphrase)
         key
-        (Base (Propose (IntroduceMember key (Set.singleton Admin))))
+        ( Base
+            ( Propose
+                ( IntroduceMember
+                    key
+                    email
+                    (Set.singleton (AdminRole PublicAdmin))
+                )
+            )
+        )
 
   HandleMembers output -> case output of
     Members.SubmitPropose proposal' -> do
@@ -225,12 +276,60 @@ handleAction = case _ of
   SSEMessage msgStr -> do
     case parseSseMessage msgStr of
       Left _ -> pure unit
-      Right _ -> do
-        -- Re-fetch from current position
-        fetchNewEvents
+      Right _ -> fetchNewEvents
+
+  CopyKey -> do
+    st <- H.get
+    case st.identity of
+      Just ident -> liftEffect $ Storage.copyToClipboard ident.prefix
+      Nothing -> pure unit
+
+  ResetIdentity -> do
+    ok <- liftEffect $ Storage.confirm "Reset your identity? This cannot be undone."
+    when ok do
+      liftEffect $ Storage.removeItem "kelgroups-prefix"
+      H.modify_ _ { identity = Nothing, screen = IdentityScreen }
 
   Dismiss ->
     H.modify_ _ { error = Nothing }
+
+-- | Check membership via /info + /events, decide which screen.
+checkMembershipAndLoad
+  :: forall o m
+   . MonadAff m
+  => String
+  -> H.HalogenM State Action Slots o m Unit
+checkMembershipAndLoad key = do
+  -- First try fetching events (will 403 if not a member)
+  res <- liftAff $ Fetch.fetch
+    (baseUrl <> "/events?after=-1&key=" <> key)
+    { method: "GET", body: "" }
+  case res.status of
+    200 -> do
+      -- We're a member, replay all events
+      fetchAndReplay key
+      startSSE key
+    403 -> do
+      -- Not a member — fetch /info to decide screen
+      infoRes <- liftAff $ Fetch.fetch
+        (baseUrl <> "/info?key=" <> key)
+        { method: "GET", body: "" }
+      case parseInfoResponse infoRes.body of
+        Left _ ->
+          -- Can't parse info, assume bootstrap
+          H.modify_ _ { screen = BootstrapScreen }
+        Right info ->
+          if info.publicAdminEmails == []
+            && not info.pendingIntroduction then
+            H.modify_ _ { screen = BootstrapScreen }
+          else
+            H.modify_ _ { screen = NonMemberScreen info }
+    404 -> do
+      -- No events at all — bootstrap mode
+      H.modify_ _ { screen = BootstrapScreen }
+    _ ->
+      H.modify_ _
+        { error = Just ("Fetch failed: " <> show res.status) }
 
 -- | Submit a group event to the server.
 submitEvent
@@ -248,18 +347,30 @@ submitEvent passphrase signer evt = do
   res <- liftAff $ Fetch.fetch (baseUrl <> "/events")
     { method: "POST", body: stringify body }
   if res.status /= 200 then H.modify_ _ { error = Just ("Submit failed: " <> res.body) }
-  else fetchNewEvents
+  else do
+    st <- H.get
+    case st.identity of
+      Just ident -> do
+        fetchNewEvents
+        -- After bootstrap, re-check membership
+        case st.screen of
+          BootstrapScreen -> checkMembershipAndLoad ident.prefix
+          _ -> pure unit
+      Nothing -> fetchNewEvents
 
 -- | Fetch all events from the beginning and rebuild state.
 fetchAndReplay
   :: forall o m
    . MonadAff m
-  => H.HalogenM State Action Slots o m Unit
-fetchAndReplay = do
+  => String
+  -> H.HalogenM State Action Slots o m Unit
+fetchAndReplay key = do
   let
     go seqNo gs = do
       res <- liftAff $ Fetch.fetch
-        (baseUrl <> "/events?after=" <> show seqNo)
+        ( baseUrl <> "/events?after=" <> show seqNo
+            <> "&key=" <> key
+        )
         { method: "GET", body: "" }
       case res.status of
         404 -> do
@@ -298,45 +409,52 @@ fetchNewEvents
   => H.HalogenM State Action Slots o m Unit
 fetchNewEvents = do
   st <- H.get
-  let
-    go seqNo gs = do
-      res <- liftAff $ Fetch.fetch
-        (baseUrl <> "/events?after=" <> show seqNo)
-        { method: "GET", body: "" }
-      case res.status of
-        404 -> do
-          let
-            screen =
-              if adminCount gs == 0 then BootstrapScreen
-              else NormalScreen
-          H.modify_ _
-            { groupState = gs
-            , serverSeqNo = seqNo + 1
-            , screen = screen
-            }
-        200 ->
-          case parseEventResponse res.body of
-            Left _ -> H.modify_ _ { serverSeqNo = seqNo + 1 }
-            Right { signer, event } ->
-              case decodeGroupEvent (const (Right unit)) event of
+  case st.identity of
+    Nothing -> pure unit
+    Just ident -> do
+      let
+        key = ident.prefix
+        go seqNo gs = do
+          res <- liftAff $ Fetch.fetch
+            ( baseUrl <> "/events?after=" <> show seqNo
+                <> "&key=" <> key
+            )
+            { method: "GET", body: "" }
+          case res.status of
+            404 -> do
+              let
+                screen =
+                  if adminCount gs == 0 then BootstrapScreen
+                  else NormalScreen
+              H.modify_ _
+                { groupState = gs
+                , serverSeqNo = seqNo + 1
+                , screen = screen
+                }
+            200 ->
+              case parseEventResponse res.body of
                 Left _ -> H.modify_ _ { serverSeqNo = seqNo + 1 }
-                Right evt -> do
-                  let gs' = applyEvent trivialFold gs (Tuple signer evt)
-                  go (seqNo + 1) gs'
-        _ ->
-          H.modify_ _ { error = Just ("Fetch failed: " <> show res.status) }
-  go (st.serverSeqNo - 1) st.groupState
+                Right { signer, event } ->
+                  case decodeGroupEvent (const (Right unit)) event of
+                    Left _ -> H.modify_ _ { serverSeqNo = seqNo + 1 }
+                    Right evt -> do
+                      let gs' = applyEvent trivialFold gs (Tuple signer evt)
+                      go (seqNo + 1) gs'
+            _ ->
+              H.modify_ _ { error = Just ("Fetch failed: " <> show res.status) }
+      go (st.serverSeqNo - 1) st.groupState
 
 -- | Start SSE subscription.
 startSSE
   :: forall o m
    . MonadAff m
-  => H.HalogenM State Action Slots o m Unit
-startSSE = do
+  => String
+  -> H.HalogenM State Action Slots o m Unit
+startSSE key = do
   { emitter, listener } <- liftEffect HS.create
   void $ H.subscribe emitter
   es <- liftEffect do
-    es <- SSE.create (baseUrl <> "/stream")
+    es <- SSE.create (baseUrl <> "/stream?key=" <> key)
     SSE.onMessage es \msg ->
       HS.notify listener (SSEMessage msg)
     pure es
@@ -363,3 +481,10 @@ parseEventResponse s = do
     signer <- obj .: "signer"
     event <- obj .: "event"
     pure { signer, event }
+
+-- | Parse a GET /info response body.
+parseInfoResponse
+  :: String -> Either String InfoResponse
+parseInfoResponse s = do
+  json <- lmap show (jsonParser s)
+  lmap printJsonDecodeError (decodeInfoResponse json)

@@ -154,13 +154,14 @@ tryEnact gs proposalId =
 -- | Enact a proposal by modifying the group condition.
 enact :: GroupState a -> Proposal -> GroupState a
 enact gs = \case
-    IntroduceMember pubKey roles ->
+    IntroduceMember pubKey email roles ->
         gs
             { members =
                 Map.insert
                     pubKey
                     Member
                         { memberKey = pubKey
+                        , memberEmail = email
                         , memberRoles = roles
                         }
                     (members gs)

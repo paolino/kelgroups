@@ -15,9 +15,8 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust)
 import Data.Set (Set)
-import Data.Set as Set
 import KelGroups.Client.Event (Proposal)
-import KelGroups.Client.Types (Member, Role(..))
+import KelGroups.Client.Types (Member, hasAdmin)
 
 -- | A pending proposal awaiting admin majority.
 type PendingProposal =
@@ -44,10 +43,10 @@ emptyState initial =
 -- | Count admins in the group.
 adminCount :: forall a. GroupState a -> Int
 adminCount gs =
-  Map.size $ Map.filter hasAdmin gs.members
+  Map.size $ Map.filter hasAdminM gs.members
   where
-  hasAdmin :: Member -> Boolean
-  hasAdmin m = Set.member Admin m.roles
+  hasAdminM :: Member -> Boolean
+  hasAdminM m = hasAdmin m.roles
 
 -- | Majority threshold: ceiling(numAdmins / 2).
 majority :: forall a. GroupState a -> Int
@@ -61,7 +60,7 @@ majority gs =
 isAdmin :: forall a. String -> GroupState a -> Boolean
 isAdmin key gs = case Map.lookup key gs.members of
   Nothing -> false
-  Just m -> Set.member Admin m.roles
+  Just m -> hasAdmin m.roles
 
 -- | Check if a key belongs to a member.
 isMember :: forall a. String -> GroupState a -> Boolean

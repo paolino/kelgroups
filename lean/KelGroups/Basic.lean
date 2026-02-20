@@ -10,10 +10,17 @@ namespace KelGroups
 /-- A member identifier (abstract, stands for a public key). -/
 abbrev MemberId := Nat
 
-/-- A role is either the distinguished Admin role or an
-application-defined role identified by name. -/
+/-- Admin visibility: public admins expose their email
+to non-members, private admins do not. -/
+inductive Admin where
+  | publicAdmin : Admin
+  | privateAdmin : Admin
+  deriving DecidableEq, Repr
+
+/-- A role is either an admin role (public or private)
+or an application-defined role identified by name. -/
 inductive Role where
-  | admin : Role
+  | adminRole : Admin → Role
   | appRole : String → Role
   deriving DecidableEq, Repr
 
@@ -23,10 +30,10 @@ structure Member where
   roles : List Role
   deriving Repr
 
-/-- Check if a role list contains Admin. -/
+/-- Check if a role list contains any admin role. -/
 def hasAdmin (roles : List Role) : Bool :=
   roles.any fun r => match r with
-    | .admin => true
+    | .adminRole _ => true
     | _ => false
 
 /-- A proposal for a group change. -/

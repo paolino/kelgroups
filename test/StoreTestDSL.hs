@@ -50,7 +50,7 @@ import KelGroups.Trivial
     ( trivialFold
     , trivialInitial
     )
-import KelGroups.Types (Role (..))
+import KelGroups.Types (Admin (..), Role (..))
 import System.Directory (removeFile)
 import System.IO.Temp (emptySystemTempFile)
 import Test.QuickCheck
@@ -149,7 +149,10 @@ arbitraryHistory = sized $ \n -> do
                 Propose $
                     IntroduceMember
                         bootstrapKey
-                        (Set.singleton Admin)
+                        (bootstrapKey <> "@test.example")
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
             )
         gs0 =
             applyEvent
@@ -188,6 +191,8 @@ arbitraryHistory = sized $ \n -> do
         let memberKeys = Map.keys (members gs)
             isExisting = key `elem` memberKeys
             nAdmins = adminCount gs
+        let email = key <> "@test.example"
+            adminRole' = AdminRole PublicAdmin
         if isExisting
             then
                 if nAdmins >= 2
@@ -196,22 +201,24 @@ arbitraryHistory = sized $ \n -> do
                             [ RemoveMember key
                             , ChangeRoles
                                 key
-                                (Set.singleton Admin)
+                                (Set.singleton adminRole')
                             , ChangeRoles key Set.empty
                             ]
                     else
                         elements
                             [ ChangeRoles
                                 key
-                                (Set.singleton Admin)
+                                (Set.singleton adminRole')
                             , ChangeRoles key Set.empty
                             ]
             else do
                 roles <-
                     elements
-                        [ Set.singleton Admin
+                        [ Set.singleton adminRole'
                         , Set.empty
                         , Set.fromList
-                            [Admin, AppRole "editor"]
+                            [ adminRole'
+                            , AppRole "editor"
+                            ]
                         ]
-                pure $ IntroduceMember key roles
+                pure $ IntroduceMember key email roles

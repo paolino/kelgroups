@@ -20,13 +20,12 @@ module KelGroups.State
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
-import Data.Set qualified as Set
 import Data.Text (Text)
 import KelGroups.Event (Proposal)
 import KelGroups.Types
     ( Member (..)
     , ProposalId
-    , Role (..)
+    , hasAdmin
     )
 
 {- | The group condition, derived from folding the KEL.
@@ -61,8 +60,7 @@ emptyState = GroupState Map.empty Map.empty
 adminCount :: GroupState a -> Int
 adminCount =
     Map.size
-        . Map.filter
-            (Set.member Admin . memberRoles)
+        . Map.filter (hasAdmin . memberRoles)
         . members
 
 {- | Compute required majority for admin votes.
@@ -78,7 +76,7 @@ majority gs =
 isAdmin :: Text -> GroupState a -> Bool
 isAdmin pubKey gs =
     case Map.lookup pubKey (members gs) of
-        Just m -> Set.member Admin (memberRoles m)
+        Just m -> hasAdmin (memberRoles m)
         Nothing -> False
 
 -- | Check if a public key belongs to a member.

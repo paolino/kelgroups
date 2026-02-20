@@ -123,7 +123,7 @@ handleAction = case _ of
 -- Helpers
 
 describeProposal :: Proposal -> String
-describeProposal (IntroduceMember key _) =
+describeProposal (IntroduceMember key _ _) =
   "Introduce " <> truncateKey key
 describeProposal (RemoveMember key) =
   "Remove " <> truncateKey key

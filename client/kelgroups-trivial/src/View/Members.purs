@@ -18,8 +18,10 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import KelGroups.Client.Event (Proposal(..))
-import KelGroups.Client.State (GroupState, isAdmin)
-import KelGroups.Client.Types (Member, Role(..))
+import Effect.Class (liftEffect)
+import FFI.Storage as Storage
+import KelGroups.Client.State (GroupState, isAdmin, isMember)
+import KelGroups.Client.Types (Admin(..), Member, Role(..))
 
 data Output = SubmitPropose Proposal
 
@@ -32,6 +34,7 @@ type State =
   { groupState :: GroupState Unit
   , myKey :: Maybe String
   , newMemberKey :: String
+  , newMemberEmail :: String
   , newMemberAdmin :: Boolean
   , changingRolesFor :: Maybe String
   }
@@ -39,6 +42,7 @@ type State =
 data Action
   = Receive Input
   | SetNewMemberKey String
+  | SetNewMemberEmail String
   | ToggleNewMemberAdmin
   | DoIntroduce
   | DoRemove String
@@ -61,16 +65,28 @@ initialState input =
   { groupState: input.groupState
   , myKey: input.myKey
   , newMemberKey: ""
+  , newMemberEmail: ""
   , newMemberAdmin: false
   , changingRolesFor: Nothing
   }
 
 render :: forall m. State -> H.ComponentHTML Action () m
-render st = HH.div [ HP.class_ (HH.ClassName "members") ]
-  [ HH.h2_ [ HH.text "Members" ]
-  , memberTable st
-  , introduceForm st
-  ]
+render st =
+  let
+    amIMember = case st.myKey of
+      Nothing -> false
+      Just k -> isMember k st.groupState
+  in
+    HH.div [ HP.class_ (HH.ClassName "members") ]
+      [ HH.h2_ [ HH.text "Members" ]
+      , memberTable st
+      , if amIMember then introduceForm st
+        else HH.p [ HP.class_ (HH.ClassName "not-member-hint") ]
+          [ HH.text
+              "You are not a member yet. Share your key with \
+              \an admin to be introduced."
+          ]
+      ]
 
 memberTable :: forall m. State -> H.ComponentHTML Action () m
 memberTable st =
@@ -84,6 +100,7 @@ memberTable st =
       [ HH.thead_
           [ HH.tr_
               [ HH.th_ [ HH.text "Key" ]
+              , HH.th_ [ HH.text "Email" ]
               , HH.th_ [ HH.text "Roles" ]
               , if amIAdmin then HH.th_ [ HH.text "Actions" ]
                 else HH.text ""
@@ -97,6 +114,7 @@ memberRow amIAdmin (Tuple key member) =
   HH.tr_
     [ HH.td [ HP.class_ (HH.ClassName "key") ]
         [ HH.text (truncateKey key) ]
+    , HH.td_ [ HH.text member.email ]
     , HH.td_
         [ HH.text (showRoles member.roles) ]
     , if amIAdmin then HH.td_
@@ -117,6 +135,12 @@ introduceForm st =
         [ HP.placeholder "CESR public key"
         , HP.value st.newMemberKey
         , HE.onValueInput SetNewMemberKey
+        ]
+    , HH.input
+        [ HP.type_ HP.InputEmail
+        , HP.placeholder "Email address"
+        , HP.value st.newMemberEmail
+        , HE.onValueInput SetNewMemberEmail
         ]
     , HH.label_
         [ HH.input
@@ -148,18 +172,33 @@ handleAction = case _ of
   SetNewMemberKey s ->
     H.modify_ _ { newMemberKey = s }
 
+  SetNewMemberEmail s ->
+    H.modify_ _ { newMemberEmail = s }
+
   ToggleNewMemberAdmin ->
     H.modify_ \s -> s { newMemberAdmin = not s.newMemberAdmin }
 
   DoIntroduce -> do
     st <- H.get
-    when (st.newMemberKey /= "") do
+    when (st.newMemberKey /= "" && st.newMemberEmail /= "") do
       let
         roles =
-          if st.newMemberAdmin then Set.singleton Admin
+          if st.newMemberAdmin
+            then Set.singleton (AdminRole PublicAdmin)
           else Set.empty
-      H.raise (SubmitPropose (IntroduceMember st.newMemberKey roles))
-      H.modify_ _ { newMemberKey = "", newMemberAdmin = false }
+      H.raise
+        ( SubmitPropose
+            ( IntroduceMember
+                st.newMemberKey
+                st.newMemberEmail
+                roles
+            )
+        )
+      H.modify_ _
+        { newMemberKey = ""
+        , newMemberEmail = ""
+        , newMemberAdmin = false
+        }
 
   DoRemove key ->
     H.raise (SubmitPropose (RemoveMember key))
@@ -170,7 +209,7 @@ handleAction = case _ of
   DoChangeRoles key makeAdmin -> do
     let
       roles =
-        if makeAdmin then Set.singleton Admin
+        if makeAdmin then Set.singleton (AdminRole PublicAdmin)
         else Set.empty
     H.raise (SubmitPropose (ChangeRoles key roles))
     H.modify_ _ { changingRolesFor = Nothing }
@@ -189,5 +228,6 @@ showRoles roles =
   in
     String.joinWith ", " (map showRole arr)
   where
-  showRole Admin = "Admin"
+  showRole (AdminRole PublicAdmin) = "Public Admin"
+  showRole (AdminRole PrivateAdmin) = "Private Admin"
   showRole (AppRole name) = name

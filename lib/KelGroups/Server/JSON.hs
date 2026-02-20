@@ -41,7 +41,11 @@ import KelGroups.State
     ( GroupState (..)
     , PendingProposal (..)
     )
-import KelGroups.Types (Member (..), Role (..))
+import KelGroups.Types
+    ( Admin (..)
+    , Member (..)
+    , Role (..)
+    )
 import KelGroups.Validate (ValidationError (..))
 
 -- --------------------------------------------------------
@@ -74,31 +78,48 @@ data ServerError
     deriving stock (Show, Eq)
 
 -- --------------------------------------------------------
+-- Admin
+-- --------------------------------------------------------
+
+instance ToJSON Admin where
+    toJSON PublicAdmin = String "publicAdmin"
+    toJSON PrivateAdmin = String "privateAdmin"
+
+instance FromJSON Admin where
+    parseJSON = withText "Admin" $ \case
+        "publicAdmin" -> pure PublicAdmin
+        "privateAdmin" -> pure PrivateAdmin
+        t -> fail $ "unknown Admin: " <> show t
+
+-- --------------------------------------------------------
 -- Role
 -- --------------------------------------------------------
 
 instance ToJSON Role where
-    toJSON Admin = String "admin"
+    toJSON (AdminRole adm) =
+        object ["adminRole" .= adm]
     toJSON (AppRole name) =
         object ["appRole" .= name]
 
 instance FromJSON Role where
-    parseJSON (String "admin") = pure Admin
-    parseJSON v =
-        withObject
-            "Role"
-            (\o -> AppRole <$> o .: "appRole")
-            v
+    parseJSON = withObject "Role" $ \o -> do
+        mAdmin <- o .:? "adminRole"
+        mApp <- o .:? "appRole"
+        case (mAdmin :: Maybe Admin, mApp :: Maybe Text) of
+            (Just adm, _) -> pure (AdminRole adm)
+            (_, Just name) -> pure (AppRole name)
+            _ -> fail "unknown Role"
 
 -- --------------------------------------------------------
 -- Proposal
 -- --------------------------------------------------------
 
 instance ToJSON Proposal where
-    toJSON (IntroduceMember key roles) =
+    toJSON (IntroduceMember key email roles) =
         object
             [ "tag" .= ("introduce" :: Text)
             , "key" .= key
+            , "email" .= email
             , "roles" .= Set.toList roles
             ]
     toJSON (RemoveMember key) =
@@ -120,6 +141,7 @@ instance FromJSON Proposal where
             "introduce" ->
                 IntroduceMember
                     <$> o .: "key"
+                    <*> o .: "email"
                     <*> (Set.fromList <$> o .: "roles")
             "remove" ->
                 RemoveMember <$> o .: "key"
@@ -189,6 +211,7 @@ instance ToJSON Member where
     toJSON m =
         object
             [ "key" .= memberKey m
+            , "email" .= memberEmail m
             , "roles" .= Set.toList (memberRoles m)
             ]
 
@@ -196,6 +219,7 @@ instance FromJSON Member where
     parseJSON = withObject "Member" $ \o ->
         Member
             <$> o .: "key"
+            <*> o .: "email"
             <*> (Set.fromList <$> o .: "roles")
 
 -- --------------------------------------------------------

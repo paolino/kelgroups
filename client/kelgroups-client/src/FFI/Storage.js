@@ -10,3 +10,11 @@ export const setItemImpl = (key) => (value) => () => {
 export const removeItemImpl = (key) => () => {
   localStorage.removeItem(key);
 };
+
+export const confirmImpl = (msg) => () => {
+  return window.confirm(msg);
+};
+
+export const copyToClipboardImpl = (text) => () => {
+  navigator.clipboard.writeText(text);
+};

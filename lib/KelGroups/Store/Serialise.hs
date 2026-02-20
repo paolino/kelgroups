@@ -28,21 +28,43 @@ import KelGroups.Event
     , Proposal (..)
     )
 import KelGroups.State (PendingProposal (..))
-import KelGroups.Types (Member (..), Role (..))
+import KelGroups.Types
+    ( Admin (..)
+    , Member (..)
+    , Role (..)
+    )
+
+-- --------------------------------------------------------
+-- Admin
+-- --------------------------------------------------------
+
+instance Serialise Admin where
+    encode PublicAdmin =
+        encodeListLen 1 <> encodeWord 0
+    encode PrivateAdmin =
+        encodeListLen 1 <> encodeWord 1
+    decode = do
+        _ <- decodeListLen
+        tag <- decodeWord
+        case tag of
+            0 -> pure PublicAdmin
+            1 -> pure PrivateAdmin
+            _ -> fail "invalid Admin encoding"
 
 -- --------------------------------------------------------
 -- Role
 -- --------------------------------------------------------
 
 instance Serialise Role where
-    encode Admin = encodeListLen 1 <> encodeWord 0
+    encode (AdminRole adm) =
+        encodeListLen 2 <> encodeWord 0 <> encode adm
     encode (AppRole name) =
         encodeListLen 2 <> encodeWord 1 <> encode name
     decode = do
         len <- decodeListLen
         tag <- decodeWord
         case (len, tag) of
-            (1, 0) -> pure Admin
+            (2, 0) -> AdminRole <$> decode
             (2, 1) -> AppRole <$> decode
             _ -> fail "invalid Role encoding"
 
@@ -51,10 +73,11 @@ instance Serialise Role where
 -- --------------------------------------------------------
 
 instance Serialise Proposal where
-    encode (IntroduceMember key roles) =
-        encodeListLen 3
+    encode (IntroduceMember key email roles) =
+        encodeListLen 4
             <> encodeWord 0
             <> encode key
+            <> encode email
             <> encode (Set.toList roles)
     encode (RemoveMember key) =
         encodeListLen 2
@@ -69,9 +92,10 @@ instance Serialise Proposal where
         len <- decodeListLen
         tag <- decodeWord
         case (len, tag) of
-            (3, 0) ->
+            (4, 0) ->
                 IntroduceMember
                     <$> decode
+                    <*> decode
                     <*> (Set.fromList <$> decode)
             (2, 1) -> RemoveMember <$> decode
             (3, 2) ->
@@ -128,13 +152,15 @@ instance (Serialise a) => Serialise (GroupEvent a) where
 
 instance Serialise Member where
     encode m =
-        encodeListLen 2
+        encodeListLen 3
             <> encode (memberKey m)
+            <> encode (memberEmail m)
             <> encode (Set.toList (memberRoles m))
     decode = do
         _ <- decodeListLen
         Member
             <$> decode
+            <*> decode
             <*> (Set.fromList <$> decode)
 
 -- --------------------------------------------------------

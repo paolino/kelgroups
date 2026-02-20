@@ -34,7 +34,7 @@ import KelGroups.State
     ( GroupState (..)
     , PendingProposal (..)
     )
-import KelGroups.Types (Role (..))
+import KelGroups.Types (Admin (..), Role (..))
 import KelGroups.Validate
     ( ValidationError (..)
     , validateEvent
@@ -56,23 +56,25 @@ spec = do
         prop "bootstrap accepts admin intro" $ do
             key <- arbitraryKey
             roles <- arbitraryAdminRoles
+            let email = key <> "@test.example"
             pure $
                 validateEvent
                     trivialConfig
                     emptyGS
                     key
-                    (Base $ Propose $ IntroduceMember key roles)
+                    (Base $ Propose $ IntroduceMember key email roles)
                     `shouldBe` Right ()
 
         prop "bootstrap rejects non-admin intro" $ do
             key <- arbitraryKey
             roles <- arbitraryNonAdminRoles
+            let email = key <> "@test.example"
             pure $
                 validateEvent
                     trivialConfig
                     emptyGS
                     key
-                    (Base $ Propose $ IntroduceMember key roles)
+                    (Base $ Propose $ IntroduceMember key email roles)
                     `shouldBe` Left BootstrapRequiresAdmin
 
         prop "bootstrap rejects remove" $ do
@@ -107,10 +109,11 @@ spec = do
             gs <- arbitraryWithAdmin
             signer <- freshKey gs
             roles <- arbitraryAdminRoles
-            let evt =
+            let email = signer <> "@test.example"
+                evt =
                     Base $
                         Propose $
-                            IntroduceMember signer roles
+                            IntroduceMember signer email roles
             pure $
                 validateEvent
                     trivialConfig
@@ -123,12 +126,16 @@ spec = do
             gs <- arbitraryWithNonAdmin
             signer <- nonAdminMemberKey gs
             target <- freshKey gs
-            let evt =
+            let email = target <> "@test.example"
+                evt =
                     Base $
                         Propose $
                             IntroduceMember
                                 target
-                                (Set.singleton Admin)
+                                email
+                                ( Set.singleton
+                                    (AdminRole PublicAdmin)
+                                )
             pure $
                 validateEvent
                     trivialConfig
@@ -170,12 +177,16 @@ spec = do
             gs <- arbitraryWithAdmin
             signer <- adminKey gs
             target <- existingKey gs
-            let evt =
+            let email = target <> "@test.example"
+                evt =
                     Base $
                         Propose $
                             IntroduceMember
                                 target
-                                (Set.singleton Admin)
+                                email
+                                ( Set.singleton
+                                    (AdminRole PublicAdmin)
+                                )
             pure $
                 validateEvent
                     trivialConfig
@@ -207,10 +218,11 @@ spec = do
             signer <- adminKey gs
             target <- freshKey gs
             roles <- arbitraryAdminRoles
-            let evt =
+            let email = target <> "@test.example"
+                evt =
                     Base $
                         Propose $
-                            IntroduceMember target roles
+                            IntroduceMember target email roles
             pure $
                 validateEvent
                     trivialConfig

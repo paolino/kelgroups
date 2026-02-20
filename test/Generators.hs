@@ -38,7 +38,8 @@ import KelGroups.State
     , isAdmin
     )
 import KelGroups.Types
-    ( GroupConfig (..)
+    ( Admin (..)
+    , GroupConfig (..)
     , Member (..)
     , Role (..)
     )
@@ -57,11 +58,15 @@ import Test.QuickCheck
 -- Arbitrary instances
 -- --------------------------------------------------------
 
+instance Arbitrary Admin where
+    arbitrary :: Gen Admin
+    arbitrary = elements [PublicAdmin, PrivateAdmin]
+
 instance Arbitrary Role where
     arbitrary :: Gen Role
     arbitrary =
         oneof
-            [ pure Admin
+            [ AdminRole <$> arbitrary
             , AppRole . pack . ("role" <>) . show
                 <$> chooseInt (0, 9)
             ]
@@ -70,15 +75,22 @@ instance Arbitrary Member where
     arbitrary :: Gen Member
     arbitrary = do
         key <- arbitraryKey
+        let email = key <> "@test.example"
         roles <- Set.fromList <$> listOf arbitrary
-        pure Member{memberKey = key, memberRoles = roles}
+        pure
+            Member
+                { memberKey = key
+                , memberEmail = email
+                , memberRoles = roles
+                }
 
 instance Arbitrary Proposal where
     arbitrary :: Gen Proposal
     arbitrary = do
         key <- arbitraryKey
+        let email = key <> "@test.example"
         oneof
-            [ IntroduceMember key . Set.fromList
+            [ IntroduceMember key email . Set.fromList
                 <$> listOf arbitrary
             , pure $ RemoveMember key
             , ChangeRoles key . Set.fromList
@@ -131,13 +143,14 @@ arbitraryWithTwoAdmins =
     arbitraryGroupState `suchThat` \gs ->
         adminCount gs >= 2
 
--- | An admin-bearing role set (always contains Admin).
+-- | An admin-bearing role set (always contains an AdminRole).
 arbitraryAdminRoles :: Gen (Set.Set Role)
 arbitraryAdminRoles = do
+    adm <- arbitrary
     extras <- listOf arbitrary
-    pure $ Set.insert Admin (Set.fromList extras)
+    pure $ Set.insert (AdminRole adm) (Set.fromList extras)
 
--- | A non-admin role set (never contains Admin).
+-- | A non-admin role set (never contains AdminRole).
 arbitraryNonAdminRoles :: Gen (Set.Set Role)
 arbitraryNonAdminRoles = do
     n <- chooseInt (0, 5)
@@ -168,7 +181,10 @@ gsWithAdminCount n =
     adminMember k =
         Member
             { memberKey = k
-            , memberRoles = Set.singleton Admin
+            , memberEmail = k <> "@test.example"
+            , memberRoles =
+                Set.singleton
+                    (AdminRole PublicAdmin)
             }
 
 -- | Pick an existing member key from a group state.

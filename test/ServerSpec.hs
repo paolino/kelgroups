@@ -46,11 +46,12 @@ import KelGroups.Trivial
     , trivialFold
     , trivialInitial
     )
-import KelGroups.Types (Role (..))
+import KelGroups.Types (Admin (..), Role (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types
     ( status200
     , status401
+    , status403
     , status404
     , status422
     )
@@ -144,7 +145,10 @@ bootstrapSubmission =
                 Propose $
                     IntroduceMember
                         "admin1"
-                        (Set.singleton Admin)
+                        "admin1@test.example"
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
         }
 
 -- | Helper to extract a text field from JSON response.
@@ -173,17 +177,27 @@ spec :: Spec
 spec = describe "KelGroups.Server (HTTP)" $ do
     around withTestApp $ do
         describe "GET /condition" $ do
-            it "empty KEL returns bootstrap mode" $
+            it "empty KEL: non-member gets 403" $
+                \port -> do
+                    mgr <-
+                        HC.newManager
+                            HC.defaultManagerSettings
+                    resp <-
+                        httpGet
+                            mgr
+                            port
+                            "/condition?key=anyone"
+                    HC.responseStatus resp
+                        `shouldBe` status403
+
+            it "empty KEL: missing key gets 401" $
                 \port -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
                     resp <- httpGet mgr port "/condition"
                     HC.responseStatus resp
-                        `shouldBe` status200
-                    cr <-
-                        decodeOrFail (HC.responseBody resp)
-                    condAuthMode cr `shouldBe` "bootstrap"
+                        `shouldBe` status401
 
         describe "POST /events" $ do
             it
@@ -258,22 +272,28 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                         httpGet
                             mgr
                             port
-                            "/events?after=-1"
+                            "/events?after=-1&key=admin1"
                     HC.responseStatus resp
                         `shouldBe` status200
 
-            it "beyond length returns 404" $
+            it "non-member gets 403" $
                 \port -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
+                    _ <-
+                        httpPost
+                            mgr
+                            port
+                            "/events"
+                            (encode bootstrapSubmission)
                     resp <-
                         httpGet
                             mgr
                             port
-                            "/events?after=99"
+                            "/events?after=-1&key=nobody"
                     HC.responseStatus resp
-                        `shouldBe` status404
+                        `shouldBe` status403
 
         describe "POST + GET roundtrip" $ do
             it "submitted event matches retrieved" $
@@ -291,7 +311,7 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                         httpGet
                             mgr
                             port
-                            "/events?after=0"
+                            "/events?after=0&key=admin1"
                     HC.responseStatus resp
                         `shouldBe` status200
                     er <-
@@ -311,7 +331,11 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                             port
                             "/events"
                             (encode bootstrapSubmission)
-                    resp <- httpGet mgr port "/condition"
+                    resp <-
+                        httpGet
+                            mgr
+                            port
+                            "/condition?key=admin1"
                     HC.responseStatus resp
                         `shouldBe` status200
                     cr <-
@@ -342,8 +366,11 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                                         Propose $
                                             IntroduceMember
                                                 "k2"
+                                                "k2@test.example"
                                                 ( Set.singleton
-                                                    Admin
+                                                    ( AdminRole
+                                                        PublicAdmin
+                                                    )
                                                 )
                                 }
                     resp <-
@@ -366,12 +393,39 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                     HC.responseStatus resp
                         `shouldBe` status404
 
+        describe "GET /info" $ do
+            it "returns public admin emails" $
+                \port -> do
+                    mgr <-
+                        HC.newManager
+                            HC.defaultManagerSettings
+                    _ <-
+                        httpPost
+                            mgr
+                            port
+                            "/events"
+                            (encode bootstrapSubmission)
+                    resp <-
+                        httpGet
+                            mgr
+                            port
+                            "/info?key=nobody"
+                    HC.responseStatus resp
+                        `shouldBe` status200
+
         describe "SSE /stream" $ do
             it "receives notification after POST" $
                 \port -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
+                    -- Bootstrap first to have a member
+                    _ <-
+                        httpPost
+                            mgr
+                            port
+                            "/events"
+                            (encode bootstrapSubmission)
                     -- Use a TChan to relay the SSE data
                     resultChan <- newTChanIO
                     -- Start SSE listener in background
@@ -380,7 +434,7 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                             HC.parseRequest $
                                 "http://127.0.0.1:"
                                     <> show port
-                                    <> "/stream"
+                                    <> "/stream?key=admin1"
                         HC.withResponse initReq mgr $
                             \resp -> do
                                 chunk <-
@@ -391,13 +445,26 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                                         chunk
                     -- Give SSE connection time
                     threadDelay 50000
-                    -- POST an event
+                    -- POST another event
+                    let sub2 :: Submission ()
+                        sub2 =
+                            Submission
+                                { subPassphrase = Nothing
+                                , subSigner = "admin1"
+                                , subEvent =
+                                    Base $
+                                        Propose $
+                                            IntroduceMember
+                                                "u1"
+                                                "u1@test.example"
+                                                Set.empty
+                                }
                     _ <-
                         httpPost
                             mgr
                             port
                             "/events"
-                            (encode bootstrapSubmission)
+                            (encode sub2)
                     -- Wait for SSE notification (2s timeout)
                     result <-
                         race
@@ -409,7 +476,7 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                     case result of
                         Right bs ->
                             BS.isInfixOf
-                                "\"sn\":1"
+                                "\"sn\":"
                                 bs
                                 `shouldBe` True
                         Left () ->

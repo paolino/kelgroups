@@ -1,4 +1,4 @@
-{ pkgs, project, version, ... }:
+{ pkgs, project, version, clientDist }:
 
 pkgs.dockerTools.buildImage {
   name = "ghcr.io/paolino/kelgroups";
@@ -14,9 +14,13 @@ pkgs.dockerTools.buildImage {
     name = "image-root";
     paths = [
       project.packages."kelgroups:exe:kelgroups-server"
-      (pkgs.runCommand "client-bundle" { } ''
+      (pkgs.runCommand "client-files" { } ''
         mkdir -p $out/app/client/kelgroups-trivial/dist
-        cp -r ${../client/kelgroups-trivial/dist}/* \
+        cp ${clientDist}/index.js \
+          $out/app/client/kelgroups-trivial/dist/
+        cp ${clientDist}/index.html \
+          $out/app/client/kelgroups-trivial/dist/
+        cp ${clientDist}/style.css \
           $out/app/client/kelgroups-trivial/dist/
       '')
     ];

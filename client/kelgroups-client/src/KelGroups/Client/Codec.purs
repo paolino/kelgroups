@@ -1,6 +1,8 @@
 -- | Argonaut codecs matching Haskell KelGroups.Server.JSON.
 module KelGroups.Client.Codec
-  ( encodeRole
+  ( encodeAdmin
+  , decodeAdmin
+  , encodeRole
   , decodeRole
   , encodeProposal
   , decodeProposal
@@ -13,6 +15,7 @@ module KelGroups.Client.Codec
   , encodeSubmission
   , decodeAppendResult
   , decodeServerError
+  , decodeInfoResponse
   ) where
 
 import Prelude
@@ -39,35 +42,60 @@ import KelGroups.Client.Event
   , GroupEvent(..)
   , Proposal(..)
   )
-import KelGroups.Client.Types (Member, Role(..))
+import KelGroups.Client.Types (Admin(..), Member, Role(..))
+
+-- --------------------------------------------------------
+-- Admin
+-- --------------------------------------------------------
+
+encodeAdmin :: Admin -> Json
+encodeAdmin PublicAdmin = encodeJson "publicAdmin"
+encodeAdmin PrivateAdmin = encodeJson "privateAdmin"
+
+decodeAdmin :: Json -> Either JsonDecodeError Admin
+decodeAdmin json = case decodeJson json of
+  Right ("publicAdmin" :: String) -> Right PublicAdmin
+  Right ("privateAdmin" :: String) -> Right PrivateAdmin
+  Right _ -> Left $ TypeMismatch "unknown admin string"
+  Left e -> Left e
 
 -- --------------------------------------------------------
 -- Role
 -- --------------------------------------------------------
 
 encodeRole :: Role -> Json
-encodeRole Admin = encodeJson "admin"
+encodeRole (AdminRole adm) =
+  J.fromObject $ FO.fromFoldable
+    [ Tuple "adminRole" (encodeAdmin adm) ]
 encodeRole (AppRole name) =
-  J.fromObject $ FO.fromFoldable [ Tuple "appRole" (encodeJson name) ]
+  J.fromObject $ FO.fromFoldable
+    [ Tuple "appRole" (encodeJson name) ]
 
 decodeRole :: Json -> Either JsonDecodeError Role
-decodeRole json = case decodeJson json of
-  Right ("admin" :: String) -> Right Admin
-  Right _ -> Left $ TypeMismatch "unknown role string"
-  Left _ -> do
-    obj <- decodeJson json
-    name <- obj .: "appRole"
-    pure (AppRole name)
+decodeRole json = do
+  obj <- decodeJson json
+  let
+    tryAdmin = do
+      admJson <- obj .: "adminRole"
+      adm <- decodeAdmin admJson
+      pure (AdminRole adm)
+    tryApp = do
+      name <- obj .: "appRole"
+      pure (AppRole name)
+  case tryAdmin of
+    Right r -> Right r
+    Left _ -> tryApp
 
 -- --------------------------------------------------------
 -- Proposal
 -- --------------------------------------------------------
 
 encodeProposal :: Proposal -> Json
-encodeProposal (IntroduceMember key roles) =
+encodeProposal (IntroduceMember key email roles) =
   J.fromObject $ FO.fromFoldable
     [ Tuple "tag" (encodeJson "introduce")
     , Tuple "key" (encodeJson key)
+    , Tuple "email" (encodeJson email)
     , Tuple "roles" (encodeJson (map encodeRole (Array.fromFoldable roles)))
     ]
 encodeProposal (RemoveMember key) =
@@ -89,9 +117,10 @@ decodeProposal json = do
   case tag of
     "introduce" -> do
       key <- obj .: "key"
+      email <- obj .: "email"
       rolesArr :: Array Json <- obj .: "roles"
       roles <- traverse decodeRole rolesArr
-      pure (IntroduceMember key (Set.fromFoldable roles))
+      pure (IntroduceMember key email (Set.fromFoldable roles))
     "remove" -> do
       key <- obj .: "key"
       pure (RemoveMember key)
@@ -176,6 +205,7 @@ encodeMember :: Member -> Json
 encodeMember m =
   J.fromObject $ FO.fromFoldable
     [ Tuple "key" (encodeJson m.key)
+    , Tuple "email" (encodeJson m.email)
     , Tuple "roles" (encodeJson (map encodeRole (Array.fromFoldable m.roles)))
     ]
 
@@ -183,9 +213,10 @@ decodeMember :: Json -> Either JsonDecodeError Member
 decodeMember json = do
   obj <- decodeJson json
   key <- obj .: "key"
+  email <- obj .: "email"
   rolesArr :: Array Json <- obj .: "roles"
   roles <- traverse decodeRole rolesArr
-  pure { key, roles: Set.fromFoldable roles }
+  pure { key, email, roles: Set.fromFoldable roles }
 
 -- --------------------------------------------------------
 -- Submission (for POST /events)
@@ -227,3 +258,19 @@ decodeServerError json = do
   err <- obj .: "error"
   msg <- obj .:? "message"
   pure { error: err, message: msg }
+
+-- --------------------------------------------------------
+-- InfoResponse (GET /info)
+-- --------------------------------------------------------
+
+decodeInfoResponse
+  :: Json
+  -> Either JsonDecodeError
+       { publicAdminEmails :: Array String
+       , pendingIntroduction :: Boolean
+       }
+decodeInfoResponse json = do
+  obj <- decodeJson json
+  emails <- obj .: "publicAdminEmails"
+  pending <- obj .: "pendingIntroduction"
+  pure { publicAdminEmails: emails, pendingIntroduction: pending }
