@@ -52,7 +52,7 @@ run = do
     roles <- arbitraryAdminRoles
     let
       before = adminCount gs
-      gs' = enact gs (IntroduceMember k roles)
+      gs' = enact gs (IntroduceMember k (k <> "@test.example") roles)
     pure $ adminCount gs' == before + 1
       <?> "expected " <> show (before + 1)
         <> " got "
@@ -66,7 +66,7 @@ run = do
     roles <- arbitraryNonAdminRoles
     let
       before = adminCount gs
-      gs' = enact gs (IntroduceMember k roles)
+      gs' = enact gs (IntroduceMember k (k <> "@test.example") roles)
     pure $ adminCount gs' == before
       <?> "expected " <> show before
         <> " got "

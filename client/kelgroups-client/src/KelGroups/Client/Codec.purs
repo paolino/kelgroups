@@ -32,7 +32,6 @@ import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Traversable (traverse)
 import Data.Maybe (Maybe(..))
-import Data.Set (Set)
 import Data.Set as Set
 import Data.Tuple (Tuple(..))
 import Foreign.Object as FO
