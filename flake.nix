@@ -10,17 +10,25 @@
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     flake-utils.url =
       "github:hamishmack/flake-utils/hkm/nested-hydraJobs";
+    purescript-overlay = {
+      url = "github:thomashoneyman/purescript-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     keri-hs = {
       url = "github:paolino/keri-hs";
       flake = false;
     };
   };
   outputs =
-    { self, nixpkgs, flake-utils, haskellNix, keri-hs, ... }:
+    { self, nixpkgs, flake-utils, haskellNix, purescript-overlay
+    , keri-hs, ... }:
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = import nixpkgs {
-          overlays = [ haskellNix.overlay ];
+          overlays = [
+            haskellNix.overlay
+            purescript-overlay.overlays.default
+          ];
           inherit system;
         };
         project =

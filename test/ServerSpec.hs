@@ -89,7 +89,7 @@ withTestApp action = do
                 }
     result <-
         Warp.testWithApplication
-            (pure $ mkApp env)
+            (pure $ mkApp env Nothing)
             action
     closeKEL store
     removeFile dbPath

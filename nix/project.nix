@@ -23,15 +23,19 @@ let
         python3
         python3Packages.mkdocs-material
         uv
+        purs
+        spago-unstable
+        purs-tidy-bin.purs-tidy-0_10_0
+        esbuild
+        nodejs_20
         (writeShellScriptBin "haskell-language-server-wrapper" ''
           exec haskell-language-server "$@"
         '')
       ];
     };
-    # keri-hs source available for when we add the dependency
-    # cabalProjectLocal = ''
-    #   packages: ${keri-hs}
-    # '';
+    cabalProjectLocal = ''
+      packages: ${keri-hs}
+    '';
   };
   flake = project.flake { };
 in {
