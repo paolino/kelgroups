@@ -28,8 +28,7 @@ common language
 common opts-lib
   ghc-options:
     -Wall -Werror -Wunused-imports -Wunused-packages
-    -Wmissing-export-lists -Wname-shadowing
-    -Wredundant-constraints
+    -Wmissing-export-lists -Wname-shadowing -Wredundant-constraints
 
 library
   import:          language, opts-lib
@@ -46,4 +45,21 @@ library
   build-depends:
     , base        >=4.18 && <5
     , containers  >=0.6  && <0.8
+    , text        >=2.0  && <2.2
+
+common opts-test
+  ghc-options: -Wall -Werror -Wunused-imports -Wunused-packages
+
+test-suite invariants
+  import:         language, opts-test
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  other-modules:  InvariantsSpec
+  build-depends:
+    , base        >=4.18 && <5
+    , containers  >=0.6  && <0.8
+    , hspec       >=2.11 && <2.12
+    , kelgroups
+    , QuickCheck  >=2.14 && <2.16
     , text        >=2.0  && <2.2
