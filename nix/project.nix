@@ -18,6 +18,7 @@ let
       };
       buildInputs = with pkgs; [
         just
+        lean4
         nixfmt-classic
         python3
         python3Packages.mkdocs-material
