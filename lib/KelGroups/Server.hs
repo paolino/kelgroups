@@ -31,17 +31,23 @@ import Data.Aeson
     )
 import Data.ByteString (ByteString)
 import Data.ByteString.Builder qualified as Builder
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text.Encoding qualified as TE
 import Data.Text.Read qualified as TR
 import KelGroups.Bootstrap (AuthMode (..), authMode)
+import KelGroups.Event (Proposal (..))
 import KelGroups.Fold (AppFold)
 import KelGroups.Server.JSON
     ( AppendResult (..)
     , ServerError (..)
     , Submission (..)
     )
-import KelGroups.State (GroupState)
+import KelGroups.State
+    ( GroupState (..)
+    , PendingProposal (..)
+    , isMember
+    )
 import KelGroups.Store
     ( KELStore
     , appendEvent
@@ -49,7 +55,12 @@ import KelGroups.Store
     , readEventsFrom
     , readState
     )
-import KelGroups.Types (GroupConfig)
+import KelGroups.Types
+    ( Admin (..)
+    , GroupConfig
+    , Member (..)
+    , Role (..)
+    )
 import KelGroups.Validate (validateEvent)
 import Network.HTTP.Types
     ( HeaderName
@@ -58,6 +69,7 @@ import Network.HTTP.Types
     , status200
     , status400
     , status401
+    , status403
     , status404
     , status422
     )
@@ -99,14 +111,19 @@ mkApp
     -> Application
 mkApp env mFallback req respond =
     case (requestMethod req, pathInfo req) of
+        ("GET", ["info"]) ->
+            handleInfo env req respond
         ("GET", ["condition"]) ->
-            handleCondition env req respond
+            requireMemberGuard env req respond $
+                handleCondition env req respond
         ("GET", ["events"]) ->
-            handleGetEvent env req respond
+            requireMemberGuard env req respond $
+                handleGetEvent env req respond
         ("POST", ["events"]) ->
             handlePostEvent env req respond
         ("GET", ["stream"]) ->
-            handleStream env req respond
+            requireMemberGuard env req respond $
+                handleStream env req respond
         _ -> case mFallback of
             Just fallback -> fallback req respond
             Nothing ->
@@ -298,6 +315,98 @@ handleStream env _req respond =
                         flush
                         loop
                 loop
+
+-- --------------------------------------------------------
+-- GET /info?key=K (open to anyone)
+-- --------------------------------------------------------
+
+handleInfo
+    :: ServerEnv a
+    -> Application
+handleInfo env req respond =
+    case parseKey req of
+        Nothing ->
+            respond $
+                jsonResponse status400 $
+                    BadRequest "missing ?key=K"
+        Just key -> do
+            gs <- readState (envStore env)
+            let pubEmails = publicAdminEmails gs
+                pending = hasPendingIntro key gs
+            respond $
+                responseLBS
+                    status200
+                    jsonHeaders
+                    ( encode $
+                        object
+                            [ "publicAdminEmails"
+                                .= pubEmails
+                            , "pendingIntroduction"
+                                .= pending
+                            ]
+                    )
+
+-- | Emails of members with AdminRole PublicAdmin.
+publicAdminEmails :: GroupState a -> [Text]
+publicAdminEmails gs =
+    [ memberEmail m
+    | m <- Map.elems (members gs)
+    , isPublicAdmin m
+    ]
+  where
+    isPublicAdmin m =
+        any
+            ( \case
+                AdminRole PublicAdmin -> True
+                _ -> False
+            )
+            (memberRoles m)
+
+-- | Check if any pending proposal introduces the key.
+hasPendingIntro :: Text -> GroupState a -> Bool
+hasPendingIntro key gs =
+    any matchesKey $
+        Map.elems (pendingProposals gs)
+  where
+    matchesKey pp = case proposal pp of
+        IntroduceMember k _ _ -> k == key
+        _ -> False
+
+-- --------------------------------------------------------
+-- Membership guard
+-- --------------------------------------------------------
+
+{- | Check that the request includes a valid member key.
+In bootstrap mode, all guarded endpoints are blocked
+(non-members should use /info instead).
+-}
+requireMemberGuard
+    :: ServerEnv a
+    -> Request
+    -> (Response -> IO b)
+    -> IO b
+    -> IO b
+requireMemberGuard env req respond onOk =
+    case parseKey req of
+        Nothing ->
+            respond $
+                jsonResponse status401 $
+                    BadRequest "missing key"
+        Just key -> do
+            gs <- readState (envStore env)
+            if isMember key gs
+                then onOk
+                else
+                    respond $
+                        jsonResponse status403 $
+                            BadRequest "not a member"
+
+-- | Parse the ?key=K query parameter.
+parseKey :: Request -> Maybe Text
+parseKey req =
+    case lookup "key" (queryString req) of
+        Just (Just bs) -> Just (TE.decodeUtf8 bs)
+        _ -> Nothing
 
 -- --------------------------------------------------------
 -- Helpers

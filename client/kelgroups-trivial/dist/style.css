@@ -33,9 +33,39 @@ body {
 }
 
 .user-id {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: monospace;
   font-size: 0.9rem;
   opacity: 0.8;
+}
+
+.btn-copy {
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255,255,255,0.5);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  font-family: sans-serif;
+}
+
+.btn-copy:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.btn-reset {
+  background: transparent;
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  font-family: sans-serif;
+}
+
+.btn-reset:hover {
+  background: #e74c3c;
+  color: white;
 }
 
 .error-bar {
@@ -149,6 +179,16 @@ button {
 .key {
   font-family: monospace;
   font-size: 0.85rem;
+}
+
+.not-member-hint {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fef9e7;
+  border-left: 3px solid #f39c12;
+  border-radius: 4px;
+  color: #7d6608;
+  font-size: 0.9rem;
 }
 
 .introduce-form {

@@ -24,8 +24,13 @@ import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import KelGroups.Client.Event (Proposal(..))
 import KelGroups.Client.State (GroupState)
-import KelGroups.Client.Types (Role(..))
+import KelGroups.Client.Types (Admin(..), Role(..))
+import Data.Foldable (any)
 import Test.QuickCheck.Gen (Gen, chooseInt, elements)
+
+isAdminR :: Role -> Boolean
+isAdminR (AdminRole _) = true
+isAdminR _ = false
 
 -- | Generate a random key ("key0" through "key99").
 arbitraryKey :: Gen String
@@ -45,7 +50,7 @@ adminKey :: forall a. GroupState a -> Gen String
 adminKey gs =
   let
     adminMap = Map.filter
-      (\m -> Set.member Admin m.roles)
+      (\m -> (Set.toUnfoldable m.roles :: Array Role) # any isAdminR)
       gs.members
     adminKeys = Array.fromFoldable $ Map.keys adminMap
   in
@@ -56,18 +61,19 @@ adminKey gs =
 -- | Generate a random role.
 arbitraryRole :: Gen Role
 arbitraryRole = do
-  n <- chooseInt 0 3
+  n <- chooseInt 0 4
   pure $ case n of
-    0 -> Admin
-    1 -> AppRole "reader"
-    2 -> AppRole "writer"
+    0 -> AdminRole PublicAdmin
+    1 -> AdminRole PrivateAdmin
+    2 -> AppRole "reader"
+    3 -> AppRole "writer"
     _ -> AppRole "moderator"
 
 -- | Generate a role set that always contains Admin.
 arbitraryAdminRoles :: Gen (Set.Set Role)
 arbitraryAdminRoles = do
   extra <- arbitraryRole
-  pure $ Set.insert Admin (Set.singleton extra)
+  pure $ Set.insert (AdminRole PublicAdmin) (Set.singleton extra)
 
 -- | Generate a role set that never contains Admin.
 arbitraryNonAdminRoles :: Gen (Set.Set Role)
@@ -94,7 +100,11 @@ gsWithAdminCount n =
     let
       k = "admin" <> show i
     in
-      Tuple k { key: k, roles: Set.singleton Admin }
+      Tuple k
+        { key: k
+        , email: k <> "@test.example"
+        , roles: Set.singleton (AdminRole PublicAdmin)
+        }
 
 -- | Generate a random GroupState with 0-10 members.
 arbitraryGroupState :: Gen (GroupState Unit)
@@ -118,7 +128,7 @@ arbitraryGroupState = do
     roles <-
       if admin == 0 then arbitraryAdminRoles
       else arbitraryNonAdminRoles
-    pure $ Tuple k { key: k, roles }
+    pure $ Tuple k { key: k, email: k <> "@test.example", roles }
 
 -- | Generate a GroupState with at least one admin.
 arbitraryWithAdmin :: Gen (GroupState Unit)
@@ -127,7 +137,8 @@ arbitraryWithAdmin = do
   let
     adminMember =
       { key: "admin0"
-      , roles: Set.singleton Admin
+      , email: "admin0@test.example"
+      , roles: Set.singleton (AdminRole PublicAdmin)
       }
   pure $ gs
     { members =
@@ -141,11 +152,13 @@ arbitraryWithTwoAdmins = do
   let
     a1 =
       { key: "admin0"
-      , roles: Set.singleton Admin
+      , email: "admin0@test.example"
+      , roles: Set.singleton (AdminRole PublicAdmin)
       }
     a2 =
       { key: "admin1"
-      , roles: Set.singleton Admin
+      , email: "admin1@test.example"
+      , roles: Set.singleton (AdminRole PublicAdmin)
       }
   pure $ gs
     { members =
@@ -161,7 +174,7 @@ arbitraryProposal = do
   case n of
     0 -> do
       roles <- arbitraryAdminRoles
-      pure $ IntroduceMember k roles
+      pure $ IntroduceMember k (k <> "@test.example") roles
     1 -> pure $ RemoveMember k
     _ -> do
       roles <- arbitraryAdminRoles

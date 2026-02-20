@@ -2,6 +2,8 @@ module FFI.Storage
   ( getItem
   , setItem
   , removeItem
+  , confirm
+  , copyToClipboard
   ) where
 
 import Prelude
@@ -24,3 +26,13 @@ setItem = setItemImpl
 
 removeItem :: String -> Effect Unit
 removeItem = removeItemImpl
+
+foreign import confirmImpl :: String -> Effect Boolean
+
+confirm :: String -> Effect Boolean
+confirm = confirmImpl
+
+foreign import copyToClipboardImpl :: String -> Effect Unit
+
+copyToClipboard :: String -> Effect Unit
+copyToClipboard = copyToClipboardImpl

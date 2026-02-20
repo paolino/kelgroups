@@ -64,7 +64,10 @@ spec = do
                     roles <- arbitraryAdminRoles
                     let gs' =
                             enact gs $
-                                IntroduceMember key roles
+                                IntroduceMember
+                                    key
+                                    (key <> "@test.example")
+                                    roles
                     pure $ adminCount gs' > 0
 
     describe "Tier 1: enact_introduce_admin_count" $ do
@@ -76,9 +79,10 @@ spec = do
                     arbitraryKey `suchThat` \k ->
                         not $ Map.member k (members gs)
                 roles <- arbitraryAdminRoles
-                let gs' =
+                let email = key <> "@test.example"
+                    gs' =
                         enact gs $
-                            IntroduceMember key roles
+                            IntroduceMember key email roles
                 pure $
                     adminCount gs' == adminCount gs + 1
 
@@ -95,7 +99,10 @@ spec = do
                     roles <- arbitraryNonAdminRoles
                     let gs' =
                             enact gs $
-                                IntroduceMember key roles
+                                IntroduceMember
+                                    key
+                                    (key <> "@test.example")
+                                    roles
                     pure $
                         adminCount gs' == adminCount gs
 

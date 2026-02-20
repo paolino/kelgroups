@@ -12,14 +12,14 @@ import KelGroups.Client.Types (Role)
 
 -- | A proposal for group membership changes.
 data Proposal
-  = IntroduceMember String (Set Role)
+  = IntroduceMember String String (Set Role)
   | RemoveMember String
   | ChangeRoles String (Set Role)
 
 derive instance eqProposal :: Eq Proposal
 
 instance showProposal :: Show Proposal where
-  show (IntroduceMember k _) = "IntroduceMember " <> k
+  show (IntroduceMember k _ _) = "IntroduceMember " <> k
   show (RemoveMember k) = "RemoveMember " <> k
   show (ChangeRoles k _) = "ChangeRoles " <> k
 

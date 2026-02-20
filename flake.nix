@@ -34,11 +34,15 @@
         project =
           import ./nix/project.nix { inherit pkgs keri-hs; };
         version = self.shortRev or self.dirtyShortRev or "dev";
-        docker-image =
-          import ./nix/docker-image.nix { inherit pkgs project version; };
+        clientBundle = import ./nix/client-bundle.nix { inherit pkgs; };
+        docker-image = import ./nix/docker-image.nix {
+          inherit pkgs project version;
+          clientDist = clientBundle;
+        };
       in {
         packages = project.packages // {
           inherit docker-image;
+          client-bundle = clientBundle;
         };
         devShells = project.devShells;
       });

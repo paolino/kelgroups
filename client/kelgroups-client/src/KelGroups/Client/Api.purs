@@ -2,6 +2,7 @@
 module KelGroups.Client.Api
   ( postEvent
   , getEvents
+  , getInfo
   ) where
 
 import Prelude
@@ -19,6 +20,7 @@ import Data.Maybe (Maybe(..))
 import Effect.Aff (Aff, throwError)
 import Effect.Exception (error)
 import FFI.Fetch as Fetch
+import KelGroups.Client.Codec (decodeInfoResponse)
 
 -- | Post a submission JSON to the server. Returns sequence number.
 postEvent :: String -> Json -> Aff Int
@@ -45,11 +47,14 @@ postEvent baseUrl body = do
 -- | Get event at position after+1. Returns Nothing at end.
 getEvents
   :: String
+  -> String
   -> Int
   -> Aff (Maybe { signer :: String, event :: Json })
-getEvents baseUrl after = do
+getEvents baseUrl key after = do
   res <- Fetch.fetch
-    (baseUrl <> "/events?after=" <> show after)
+    ( baseUrl <> "/events?after=" <> show after
+        <> "&key=" <> key
+    )
     { method: "GET", body: "" }
   case res.status of
     200 -> case parseEvent res.body of
@@ -66,3 +71,26 @@ getEvents baseUrl after = do
       signer <- obj .: "signer"
       evt <- obj .: "event"
       pure { signer, event: evt }
+
+-- | Get public info (admin emails, pending introduction).
+getInfo
+  :: String
+  -> String
+  -> Aff
+       { publicAdminEmails :: Array String
+       , pendingIntroduction :: Boolean
+       }
+getInfo baseUrl key = do
+  res <- Fetch.fetch
+    (baseUrl <> "/info?key=" <> key)
+    { method: "GET", body: "" }
+  when (res.status /= 200) do
+    throwError $ error $
+      "GET /info failed: " <> show res.status
+  case parseInfo res.body of
+    Left err -> throwError $ error err
+    Right r -> pure r
+  where
+  parseInfo s = do
+    json <- lmap show (jsonParser s)
+    lmap printJsonDecodeError (decodeInfoResponse json)

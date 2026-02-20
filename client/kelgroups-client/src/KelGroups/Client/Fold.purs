@@ -127,10 +127,10 @@ tryEnact gs proposalId =
 -- | Enact a proposal by modifying group state.
 enact :: forall a. GroupState a -> Proposal -> GroupState a
 enact gs = case _ of
-  IntroduceMember pubKey roles ->
+  IntroduceMember pubKey email roles ->
     let
       m :: Member
-      m = { key: pubKey, roles }
+      m = { key: pubKey, email, roles }
     in
       gs { members = Map.insert pubKey m gs.members }
   RemoveMember pubKey ->

@@ -9,12 +9,15 @@ The library is polymorphic over an application event type
 @a@ which carries domain-specific semantics.
 -}
 module KelGroups.Types
-    ( Role (..)
+    ( Admin (..)
+    , Role (..)
     , RoleName
     , Member (..)
     , GroupConfig (..)
     , RoleDef (..)
     , ProposalId
+    , isAdminRole
+    , hasAdmin
     ) where
 
 import Data.Map.Strict (Map)
@@ -27,22 +30,43 @@ type RoleName = Text
 -- | A proposal identifier (digest of the proposal).
 type ProposalId = Text
 
-{- | A role in the group. 'Admin' is the only role
-with base-system meaning: admins vote on member and
-role changes. Application roles are opaque labels
-interpreted by the application layer.
+{- | Admin visibility. 'PublicAdmin' exposes their
+email to non-members; 'PrivateAdmin' does not.
+-}
+data Admin
+    = -- | Email visible to non-members
+      PublicAdmin
+    | -- | Email hidden from non-members
+      PrivateAdmin
+    deriving stock (Eq, Ord, Show)
+
+{- | A role in the group. Admin roles (public or
+private) carry base-system meaning: admins vote on
+member and role changes. Application roles are
+opaque labels interpreted by the application layer.
 -}
 data Role
-    = -- | Distinguished base-system role
-      Admin
+    = -- | Admin role with visibility flag
+      AdminRole Admin
     | -- | Application-defined role
       AppRole RoleName
     deriving stock (Eq, Ord, Show)
+
+-- | Check if a role is any admin role.
+isAdminRole :: Role -> Bool
+isAdminRole (AdminRole _) = True
+isAdminRole _ = False
+
+-- | Check if a role set contains any admin role.
+hasAdmin :: Set Role -> Bool
+hasAdmin = any isAdminRole
 
 -- | A group member with their public key and roles.
 data Member = Member
     { memberKey :: Text
     -- ^ CESR-encoded public key
+    , memberEmail :: Text
+    -- ^ Contact email address
     , memberRoles :: Set Role
     -- ^ Current set of roles
     }

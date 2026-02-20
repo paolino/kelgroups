@@ -32,7 +32,7 @@ import KelGroups.Trivial
     ( trivialFold
     , trivialInitial
     )
-import KelGroups.Types (Role (..))
+import KelGroups.Types (Admin (..), Role (..))
 import System.Directory (removeFile)
 import System.IO.Temp (emptySystemTempFile)
 import Test.Hspec (Spec, around, describe, it, shouldBe)
@@ -78,7 +78,10 @@ arbitraryBaseEvents = do
                 Propose $
                     IntroduceMember
                         bootstrapKey
-                        (Set.singleton Admin)
+                        (bootstrapKey <> "@test.example")
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
             )
     rest <- listOf1 $ do
         key <- arbitraryKey
@@ -89,7 +92,10 @@ arbitraryBaseEvents = do
                         Propose $
                             IntroduceMember
                                 key
-                                (Set.singleton Admin)
+                                (key <> "@test.example")
+                                ( Set.singleton
+                                    (AdminRole PublicAdmin)
+                                )
                 , pure $
                     Base $
                         Propose $
@@ -176,7 +182,10 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                             Propose $
                                 IntroduceMember
                                     "k1"
-                                    (Set.singleton Admin)
+                                    "k1@test.example"
+                                    ( Set.singleton
+                                        (AdminRole PublicAdmin)
+                                    )
                         )
                     ,
                         ( "k1"
@@ -184,7 +193,10 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                             Propose $
                                 IntroduceMember
                                     "k2"
-                                    (Set.singleton Admin)
+                                    "k2@test.example"
+                                    ( Set.singleton
+                                        (AdminRole PublicAdmin)
+                                    )
                         )
                     ,
                         ( "k1"
@@ -212,7 +224,10 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                         Propose $
                             IntroduceMember
                                 "k"
-                                (Set.singleton Admin)
+                                "k@test.example"
+                                ( Set.singleton
+                                    (AdminRole PublicAdmin)
+                                )
                     )
                 tail' <- readEventsFrom store 99
                 closeKEL store

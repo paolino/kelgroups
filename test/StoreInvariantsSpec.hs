@@ -32,7 +32,7 @@ import KelGroups.State
 import KelGroups.Store (appendEvent, readState)
 import KelGroups.Store.Serialise ()
 import KelGroups.Trivial (trivialFold)
-import KelGroups.Types (Role (..))
+import KelGroups.Types (Admin (..), Role (..))
 import StoreTestDSL
     ( arbitraryHistory
     , onReachable
@@ -99,7 +99,8 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
         onReachableWith arbitraryHistory $ \gs -> do
             key <- freshKey gs
             roles <- arbitraryAdminRoles
-            let gs' = enact gs $ IntroduceMember key roles
+            let email = key <> "@test.example"
+                gs' = enact gs $ IntroduceMember key email roles
             pure $ adminCount gs' > 0
 
     -- Lean: enact_introduce_admin_count
@@ -107,7 +108,8 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
         onReachableWith arbitraryHistory $ \gs -> do
             key <- freshKey gs
             roles <- arbitraryAdminRoles
-            let gs' = enact gs $ IntroduceMember key roles
+            let email = key <> "@test.example"
+                gs' = enact gs $ IntroduceMember key email roles
             pure $
                 adminCount gs' == adminCount gs + 1
 
@@ -116,7 +118,8 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
         onReachableWith arbitraryHistory $ \gs -> do
             key <- freshKey gs
             roles <- arbitraryNonAdminRoles
-            let gs' = enact gs $ IntroduceMember key roles
+            let email = key <> "@test.example"
+                gs' = enact gs $ IntroduceMember key email roles
             pure $
                 adminCount gs' == adminCount gs
 
@@ -125,7 +128,8 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
         onReachableWith arbitraryHistory $ \gs -> do
             key <- freshKey gs
             roles <- arbitraryAdminRoles
-            let gs' = enact gs $ IntroduceMember key roles
+            let email = key <> "@test.example"
+                gs' = enact gs $ IntroduceMember key email roles
             pure $
                 pendingProposals gs'
                     == pendingProposals gs
@@ -148,12 +152,13 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
         monadicIO $ do
             key <- pick $ freshKey (emptyGS ())
             roles <- pick arbitraryAdminRoles
+            let email = key <> "@test.example"
             gs <- run $ withStore $ \store -> do
                 appendEvent store trivialFold $
                     ( "bootstrap"
                     , Base $
                         Propose $
-                            IntroduceMember key roles
+                            IntroduceMember key email roles
                     )
                 readState store
             assert $ Map.null (pendingProposals gs)
@@ -163,6 +168,7 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
         monadicIO $ do
             key <- pick $ freshKey (emptyGS ())
             roles <- pick arbitraryAdminRoles
+            let email = key <> "@test.example"
             gs <- run $ withStore $ \store -> do
                 appendEvent store trivialFold $
                     ( "bootstrap"
@@ -170,13 +176,16 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
                         Propose $
                             IntroduceMember
                                 "founder"
-                                (Set.singleton Admin)
+                                "founder@test.example"
+                                ( Set.singleton
+                                    (AdminRole PublicAdmin)
+                                )
                     )
                 appendEvent store trivialFold $
                     ( "founder"
                     , Base $
                         Propose $
-                            IntroduceMember key roles
+                            IntroduceMember key email roles
                     )
                 readState store
             assert $ Map.null (pendingProposals gs)

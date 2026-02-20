@@ -103,7 +103,10 @@ spec = do
             roles <- arbitrary
             let gs' =
                     enact gs $
-                        IntroduceMember key roles
+                        IntroduceMember
+                            key
+                            (key <> "@test.example")
+                            roles
             pure $
                 Map.size (members gs')
                     `shouldBe` Map.size (members gs)

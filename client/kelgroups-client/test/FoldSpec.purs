@@ -79,7 +79,7 @@ run = do
     roles <- arbitraryAdminRoles
     let
       before = Map.size gs.members
-      gs' = enact gs (IntroduceMember k roles)
+      gs' = enact gs (IntroduceMember k (k <> "@test.example") roles)
     pure $ Map.size gs'.members == before + 1
       <?> "expected " <> show (before + 1)
         <> " got "

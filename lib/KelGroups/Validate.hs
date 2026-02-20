@@ -34,6 +34,7 @@ import KelGroups.Types
     , Role (..)
     , RoleDef (..)
     , RoleName
+    , hasAdmin
     )
 
 -- | Validation errors for group events.
@@ -107,8 +108,8 @@ validateProposal config gs signer proposal' =
 validateBootstrapProposal
     :: Proposal -> Either ValidationError ()
 validateBootstrapProposal = \case
-    IntroduceMember _ roles
-        | Set.member Admin roles -> Right ()
+    IntroduceMember _ _ roles
+        | hasAdmin roles -> Right ()
         | otherwise -> Left BootstrapRequiresAdmin
     _ -> Left BootstrapRequiresAdmin
 
@@ -118,7 +119,7 @@ validateNormalProposal
     -> Proposal
     -> Either ValidationError ()
 validateNormalProposal config gs = \case
-    IntroduceMember pubKey roles -> do
+    IntroduceMember pubKey _email roles -> do
         requireNotMember pubKey gs
         validateRoleAdditions config gs roles
     RemoveMember pubKey ->
@@ -150,7 +151,7 @@ validateRoleAdditions
 validateRoleAdditions config gs roles =
     mapM_ checkRole (Set.toList roles)
   where
-    checkRole Admin = Right ()
+    checkRole (AdminRole _) = Right ()
     checkRole (AppRole name) =
         case Map.lookup name (roleDefs config) of
             Nothing -> Right ()
@@ -183,7 +184,7 @@ checkRemoval
     -> GroupState a
     -> Role
     -> Either ValidationError ()
-checkRemoval _ _ Admin = Right ()
+checkRemoval _ _ (AdminRole _) = Right ()
 checkRemoval config gs (AppRole name) =
     case Map.lookup name (roleDefs config) of
         Nothing -> Right ()

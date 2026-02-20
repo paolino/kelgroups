@@ -40,7 +40,7 @@ run = do
     roles <- arbitraryAdminRoles
     let
       gs' = enact (emptyState unit)
-        (IntroduceMember k roles)
+        (IntroduceMember k (k <> "@test.example") roles)
     pure $ adminCount gs' > 0
       <?> "should exit bootstrap after introducing admin"
 
@@ -103,7 +103,7 @@ run = do
     roles <- arbitraryAdminRoles
     let
       gs' = applyPropose (emptyState unit) "signer"
-        (IntroduceMember k roles)
+        (IntroduceMember k (k <> "@test.example") roles)
     pure $ Map.isEmpty gs'.pendingProposals
       <?> "proposal should enact immediately in bootstrap"
 
@@ -115,7 +115,7 @@ run = do
     roles <- arbitraryAdminRoles
     let
       gs' = applyPropose gs "admin0"
-        (IntroduceMember k roles)
+        (IntroduceMember k (k <> "@test.example") roles)
     pure $ Map.isEmpty gs'.pendingProposals
       <?> "single admin proposal should enact immediately"
 
@@ -152,6 +152,6 @@ run = do
     roles <- arbitraryAdminRoles
     let
       gs' = enact (emptyState unit)
-        (IntroduceMember k roles)
+        (IntroduceMember k (k <> "@test.example") roles)
     pure $ isAdmin k gs'
       <?> k <> " should be admin after introduce"
