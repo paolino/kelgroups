@@ -57,35 +57,25 @@ Side-by-side mapping from kelgroups to KERI.
 
 Concrete list of what kelgroups does NOT implement, ordered by severity.
 
-### Gap 1: No signature verification (CRITICAL)
+### Gap 1: ~~No signature verification~~ — CLOSED
 
-**Design doc claims:** events are signed and attributed to members.
+Server verifies Ed25519 signatures on all event submissions. PureScript
+client signs events before submitting. Implemented on `feat/keri-bridge`.
 
-**Code does:** `subSigner :: Text` in `Server/JSON.hs:55` is accepted as-is.
-The server trusts the signer field without any cryptographic verification.
-Anyone who knows a member's key text can submit events on their behalf.
-
-**KERI requires:** every event's signatures are verified against the current
-key state before the event is accepted into the KEL.
-
-**keri-hs:** `verifySignatures` in `Keri.KeyState.Verify` checks indexed
-Ed25519 signatures against the current key list and threshold.
+**Caveat:** Clients do not yet verify signatures on events fetched from
+the server. This is addressed by [#13](https://github.com/paolino/kelgroups/issues/13).
 
 ---
 
-### Gap 2: No self-certifying identifiers (HIGH)
+### Gap 2: ~~No self-certifying identifiers~~ — CLOSED
 
-**Design doc claims:** members are identified by CESR-encoded public keys.
+Member keys are validated as CESR-encoded Ed25519 public keys on
+introduction. `InvalidKey` validation error rejects anything else.
+Implemented on `feat/keri-bridge`.
 
-**Code does:** `memberKey :: Text` in `Types.hs:64` is an arbitrary text
-string. Nothing validates that it's a valid CESR-encoded Ed25519 public key.
-Test code uses `"alice"`, `"bob"` as member keys.
-
-**KERI requires:** identifiers are derived from cryptographic material.
-A KERI identifier is the SAID of its inception event.
-
-**keri-hs:** `eventPrefix` returns the self-certifying identifier;
-`Cesr.decode` validates CESR-encoded keys.
+**Caveat:** Keys are self-certifying in the sense that they are the
+public key itself, but not yet KERI self-certifying identifiers (SAID of
+inception event). That requires Gap 6 (group inception).
 
 ---
 
@@ -104,7 +94,7 @@ the serialized event with a placeholder in the digest field.
 
 ---
 
-### Gap 4: No digest chain (HIGH)
+### Gap 4: No digest chain (HIGH) — tracked in [#13](https://github.com/paolino/kelgroups/issues/13)
 
 **Design doc claims:** events form a Key Event Log.
 
@@ -116,6 +106,21 @@ can be silently deleted or reordered without detection.
 the hash of its predecessor. Tampering breaks the chain.
 
 **keri-hs:** `priorDigest` field on `InteractionData` and `RotationData`.
+
+**Core invariant:** When a user signs an event, they sign "I append X to
+a KEL whose tip has digest D." The signature commits to the entire
+history up to that point. Without this, signatures prove authorship but
+not ordering — the server can present different histories to different
+clients undetected.
+
+**Conflict handling:** When a submission references a stale tip (another
+client appended in between), the server rejects it. The client must
+fetch the new events, show the user the updated state, and let them
+re-submit, edit, or discard their draft. No automatic retry — the user
+must acknowledge the new state.
+
+See [#13](https://github.com/paolino/kelgroups/issues/13) for full
+specification.
 
 ---
 
