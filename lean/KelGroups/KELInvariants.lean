@@ -280,4 +280,202 @@ theorem appendExpired_preserves_self_contained
   | inr h =>
     exact hprev e h
 
+-- ============================================================
+-- Helper lemma
+-- ============================================================
+
+/-- getLast? is stable under cons for non-empty lists. -/
+theorem getLast?_cons_some {α : Type} (a : α) (l : List α)
+    (h : l ≠ []) :
+    (a :: l).getLast? = l.getLast? := by
+  match l, h with
+  | _ :: _, _ => simp [List.getLast?]
+
+-- ============================================================
+-- Transition preservation: appendEnacted (chain, inception,
+-- serverOnly)
+-- ============================================================
+
+/-- Appending an enacted event preserves hash chain validity. -/
+theorem appendEnacted_preserves_chain_valid
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (proofs : List ApprovalProof)
+    (tipDigest : Digest)
+    (hchain : hashChainValid l1)
+    (hne : l1 ≠ []) :
+    hashChainValid
+      (appendEnacted l1 serverK sig proposalSAID proofs
+        tipDigest) := by
+  match l1, hne, hchain with
+  | _ :: _, _, hc =>
+    simp only [appendEnacted, hashChainValid, List.head?,
+      Option.isSome]
+    exact ⟨trivial, trivial, hc⟩
+
+/-- Appending an enacted event preserves
+l1StartsWithInception. -/
+theorem appendEnacted_preserves_inception
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (proofs : List ApprovalProof)
+    (tipDigest : Digest)
+    (hinc : l1StartsWithInception l1)
+    (hne : l1 ≠ []) :
+    l1StartsWithInception
+      (appendEnacted l1 serverK sig proposalSAID proofs
+        tipDigest) := by
+  unfold l1StartsWithInception at hinc ⊢
+  simp only [appendEnacted]
+  rw [getLast?_cons_some _ _ hne]
+  exact hinc
+
+/-- Appending an enacted event preserves l1ServerOnly. -/
+theorem appendEnacted_preserves_server_only
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (proofs : List ApprovalProof)
+    (tipDigest : Digest)
+    (hso : l1ServerOnly l1)
+    (hsk : serverKey l1 = some serverK)
+    (hne : l1 ≠ []) :
+    l1ServerOnly
+      (appendEnacted l1 serverK sig proposalSAID proofs
+        tipDigest) := by
+  unfold l1ServerOnly at hso ⊢
+  rw [hsk] at hso
+  have hsk' : serverKey
+      (appendEnacted l1 serverK sig proposalSAID proofs
+        tipDigest) = some serverK := by
+    unfold serverKey appendEnacted
+    rw [getLast?_cons_some _ _ hne]
+    unfold serverKey at hsk; exact hsk
+  rw [hsk']
+  intro e he
+  simp [appendEnacted] at he
+  cases he with
+  | inl h => subst h; rfl
+  | inr h => exact hso e h
+
+-- ============================================================
+-- Transition preservation: appendExpired (chain, inception,
+-- serverOnly)
+-- ============================================================
+
+/-- Appending an expired event preserves hash chain
+validity. -/
+theorem appendExpired_preserves_chain_valid
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (tipDigest : Digest)
+    (hchain : hashChainValid l1)
+    (hne : l1 ≠ []) :
+    hashChainValid
+      (appendExpired l1 serverK sig proposalSAID
+        tipDigest) := by
+  match l1, hne, hchain with
+  | _ :: _, _, hc =>
+    simp only [appendExpired, hashChainValid, List.head?,
+      Option.isSome]
+    exact ⟨trivial, trivial, hc⟩
+
+/-- Appending an expired event preserves
+l1StartsWithInception. -/
+theorem appendExpired_preserves_inception
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (tipDigest : Digest)
+    (hinc : l1StartsWithInception l1)
+    (hne : l1 ≠ []) :
+    l1StartsWithInception
+      (appendExpired l1 serverK sig proposalSAID
+        tipDigest) := by
+  unfold l1StartsWithInception at hinc ⊢
+  simp only [appendExpired]
+  rw [getLast?_cons_some _ _ hne]
+  exact hinc
+
+/-- Appending an expired event preserves l1ServerOnly. -/
+theorem appendExpired_preserves_server_only
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (tipDigest : Digest)
+    (hso : l1ServerOnly l1)
+    (hsk : serverKey l1 = some serverK)
+    (hne : l1 ≠ []) :
+    l1ServerOnly
+      (appendExpired l1 serverK sig proposalSAID
+        tipDigest) := by
+  unfold l1ServerOnly at hso ⊢
+  rw [hsk] at hso
+  have hsk' : serverKey
+      (appendExpired l1 serverK sig proposalSAID
+        tipDigest) = some serverK := by
+    unfold serverKey appendExpired
+    rw [getLast?_cons_some _ _ hne]
+    unfold serverKey at hsk; exact hsk
+  rw [hsk']
+  intro e he
+  simp [appendExpired] at he
+  cases he with
+  | inl h => subst h; rfl
+  | inr h => exact hso e h
+
+-- ============================================================
+-- Composite L1Valid theorems
+-- ============================================================
+
+/-- Creating an L1 produces a valid chain. -/
+theorem mkL1_valid (serverK : Key) (sig : Signature) :
+    L1Valid (mkL1 serverK sig) :=
+  ⟨mkL1_chain_valid serverK sig,
+   mkL1_starts_with_inception serverK sig,
+   mkL1_server_only serverK sig,
+   mkL1_self_contained serverK sig⟩
+
+/-- Appending an enacted event preserves L1Valid. -/
+theorem appendEnacted_preserves_valid
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (proofs : List ApprovalProof)
+    (tipDigest : Digest)
+    (hvalid : L1Valid l1)
+    (hsk : serverKey l1 = some serverK)
+    (hsaid : proposalSAID ≠ 0)
+    (hproofs : proofs.length > 0) :
+    L1Valid
+      (appendEnacted l1 serverK sig proposalSAID proofs
+        tipDigest) := by
+  have hne : l1 ≠ [] := by
+    intro heq; subst heq
+    have := hvalid.inception
+    simp [l1StartsWithInception, List.getLast?] at this
+  exact ⟨
+    appendEnacted_preserves_chain_valid l1 serverK sig
+      proposalSAID proofs tipDigest hvalid.chain hne,
+    appendEnacted_preserves_inception l1 serverK sig
+      proposalSAID proofs tipDigest hvalid.inception hne,
+    appendEnacted_preserves_server_only l1 serverK sig
+      proposalSAID proofs tipDigest hvalid.serverOnly hsk
+      hne,
+    appendEnacted_preserves_self_contained l1 serverK sig
+      proposalSAID proofs tipDigest hvalid.selfContained
+      hsaid hproofs⟩
+
+/-- Appending an expired event preserves L1Valid. -/
+theorem appendExpired_preserves_valid
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (tipDigest : Digest)
+    (hvalid : L1Valid l1)
+    (hsk : serverKey l1 = some serverK) :
+    L1Valid
+      (appendExpired l1 serverK sig proposalSAID
+        tipDigest) := by
+  have hne : l1 ≠ [] := by
+    intro heq; subst heq
+    have := hvalid.inception
+    simp [l1StartsWithInception, List.getLast?] at this
+  exact ⟨
+    appendExpired_preserves_chain_valid l1 serverK sig
+      proposalSAID tipDigest hvalid.chain hne,
+    appendExpired_preserves_inception l1 serverK sig
+      proposalSAID tipDigest hvalid.inception hne,
+    appendExpired_preserves_server_only l1 serverK sig
+      proposalSAID tipDigest hvalid.serverOnly hsk hne,
+    appendExpired_preserves_self_contained l1 serverK sig
+      proposalSAID tipDigest hvalid.selfContained⟩
+
 end KelGroups
