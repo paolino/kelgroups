@@ -222,6 +222,14 @@ Start with **Option C** (hybrid). It closes the critical gaps with
 minimal architectural disruption. Option B can be adopted later as
 a separate evolution step once the foundation is solid.
 
+### Trust model
+
+The server is untrusted. Clients perform all cryptographic operations:
+key generation, event signing, SAID computation. The server's role is
+strictly verification — it checks signatures against the current key
+state but never holds or generates private keys. This is a fundamental
+design constraint that applies to every step below.
+
 ## 5. Incremental Bridge Path
 
 Each step is independently shippable and testable.
