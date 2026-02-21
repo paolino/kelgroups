@@ -1,12 +1,14 @@
 cabal-version:   3.0
 name:            kelgroups
 version:         0.1.0.0
-synopsis:        KEL-based group management library
+synopsis:        KERI hash-chained group management library
 description:
   A polymorphic Haskell library for managing groups via
-  a Key Event Log (KEL). Provides member management,
-  role-based access control with admin majority voting,
-  and bootstrap mode with passphrase authentication.
+  a KERI hash-chained Key Event Log (KEL). Group events
+  are anchored in KERI inception/interaction events with
+  Ed25519 signatures, digest chaining, and canonical JSON
+  serialization via keri-hs. Provides admin majority
+  voting, bootstrap mode, and stale-tip conflict detection.
 
 license:         Apache-2.0
 license-file:    LICENSE
