@@ -512,11 +512,11 @@
     "keri-hs": {
       "flake": false,
       "locked": {
-        "lastModified": 1771501353,
-        "narHash": "sha256-YW9iMWKapM1fcyZjoMYTZLkfHGluHtKauFAdXDgtWHc=",
+        "lastModified": 1771706064,
+        "narHash": "sha256-EZOdFm8kbYWAxu3QYqcXwBEGOnRTkcTeNyPKaDuUt7I=",
         "owner": "paolino",
         "repo": "keri-hs",
-        "rev": "5b8067795b0711286d404d464a955a245c01d808",
+        "rev": "f2a388e9deda33237ee58d358e9ab88c18bafc81",
         "type": "github"
       },
       "original": {
