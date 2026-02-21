@@ -99,6 +99,46 @@ parentheses.
 12. **L2 is ephemeral** (`l1EnactmentComplete`). L1 enacted event
     carries enough proofs to meet threshold independently.
 
+### State machine transitions
+
+Formalized in `lean/KelGroups/KEL.lean` (definitions) and
+`lean/KelGroups/KELInvariants.lean` (preservation proofs).
+
+**L2 lifecycle:**
+
+| Transition | Lean function | What it does |
+|---|---|---|
+| Create L2 | `mkL2` | Inception event with proposal, nonce, timeout |
+| Approve | `appendApproval` | Append approval event referencing proposal SAID |
+
+Preservation proofs for `mkL2`: `mkL2_chain_valid`,
+`mkL2_no_duplicate_approvals`, `mkL2_only_approvals`,
+`mkL2_has_timeout`, `mkL2_inception_by_admin`, `mkL2_approvals_match`.
+
+Preservation proofs for `appendApproval`:
+`appendApproval_preserves_approvals_match`,
+`appendApproval_fresh_preserves_no_duplicates`.
+
+**L1 lifecycle:**
+
+| Transition | Lean function | What it does |
+|---|---|---|
+| Create L1 | `mkL1` | Server inception event |
+| Enact | `appendEnacted` | Enacted event with proposal SAID + approval proofs |
+| Expire | `appendExpired` | Expired event with proposal SAID |
+
+Preservation proofs for `mkL1`: `mkL1_chain_valid`,
+`mkL1_starts_with_inception`, `mkL1_server_only`,
+`mkL1_self_contained`.
+
+Preservation proofs for `appendEnacted`/`appendExpired`:
+`appendEnacted_preserves_self_contained`,
+`appendExpired_preserves_self_contained`.
+
+**Combined validity:** `L1Valid` (invariants 1–4) and `L2Valid`
+(invariants 5, 7–9, 11) bundle the relevant predicates. Each
+transition function preserves the fields of its validity structure.
+
 See `docs/docs/keri-bridge.md` section 4 for full design.
 
 ### Remaining steps
