@@ -53,7 +53,8 @@ getEvents
 getEvents baseUrl key after = do
   res <- Fetch.fetch
     ( baseUrl <> "/events?after=" <> show after
-        <> "&key=" <> key
+        <> "&key="
+        <> key
     )
     { method: "GET", body: "" }
   case res.status of

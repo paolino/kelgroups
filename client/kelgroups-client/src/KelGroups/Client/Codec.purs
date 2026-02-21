@@ -224,7 +224,7 @@ decodeMember json = do
 encodeSubmission
   :: forall a
    . (a -> Json)
-  -> { passphrase :: Maybe String, signer :: String, event :: GroupEvent a }
+  -> { passphrase :: Maybe String, signer :: String, signature :: String, event :: GroupEvent a }
   -> Json
 encodeSubmission encA sub =
   J.fromObject $ FO.fromFoldable
@@ -234,6 +234,7 @@ encodeSubmission encA sub =
             Just p -> encodeJson p
         )
     , Tuple "signer" (encodeJson sub.signer)
+    , Tuple "signature" (encodeJson sub.signature)
     , Tuple "event" (encodeGroupEvent encA sub.event)
     ]
 

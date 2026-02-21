@@ -23,6 +23,7 @@ import Effect.Class (liftEffect)
 import FFI.Fetch as Fetch
 import FFI.SSE as SSE
 import FFI.Storage as Storage
+import FFI.TextEncoder (encodeUtf8)
 import FFI.TweetNaCl as NaCl
 import Halogen as H
 import Halogen.HTML as HH
@@ -35,6 +36,7 @@ import Keri.Cesr.Primitive (mkPrimitive)
 import KelGroups.Client.Codec
   ( decodeGroupEvent
   , decodeInfoResponse
+  , encodeGroupEvent
   , encodeSubmission
   )
 import KelGroups.Client.Event (BaseEvent(..), GroupEvent(..), Proposal(..))
@@ -179,9 +181,11 @@ content st = case st.screen of
       , if info.publicAdminEmails /= [] then
           HH.div_
             [ HH.p_ [ HH.text "Contact an admin to request introduction:" ]
-            , HH.ul_ $ map (\email ->
-                HH.li_ [ HH.text email ]
-              ) info.publicAdminEmails
+            , HH.ul_ $ map
+                ( \email ->
+                    HH.li_ [ HH.text email ]
+                )
+                info.publicAdminEmails
             ]
         else if not info.pendingIntroduction then
           HH.p_
@@ -242,25 +246,34 @@ handleAction = case _ of
 
   HandleBootstrap output -> case output of
     Bootstrap.Submit passphrase key email -> do
-      submitEvent
-        (Just passphrase)
-        key
-        ( Base
-            ( Propose
-                ( IntroduceMember
-                    key
-                    email
-                    (Set.singleton (AdminRole PublicAdmin))
+      st <- H.get
+      case st.identity of
+        Just ident ->
+          submitEvent
+            (Just passphrase)
+            ident
+            ( Base
+                ( Propose
+                    ( IntroduceMember
+                        key
+                        email
+                        ( Set.singleton
+                            (AdminRole PublicAdmin)
+                        )
+                    )
                 )
             )
-        )
+        Nothing ->
+          H.modify_ _
+            { error = Just "No identity" }
 
   HandleMembers output -> case output of
     Members.SubmitPropose proposal' -> do
       st <- H.get
       case st.identity of
         Just ident ->
-          submitEvent Nothing ident.prefix (Base (Propose proposal'))
+          submitEvent Nothing ident
+            (Base (Propose proposal'))
         Nothing ->
           H.modify_ _ { error = Just "No identity" }
 
@@ -269,7 +282,8 @@ handleAction = case _ of
       st <- H.get
       case st.identity of
         Just ident ->
-          submitEvent Nothing ident.prefix (Base (Approve proposalId))
+          submitEvent Nothing ident
+            (Base (Approve proposalId))
         Nothing ->
           H.modify_ _ { error = Just "No identity" }
 
@@ -319,8 +333,9 @@ checkMembershipAndLoad key = do
           -- Can't parse info, assume bootstrap
           H.modify_ _ { screen = BootstrapScreen }
         Right info ->
-          if info.publicAdminEmails == []
-            && not info.pendingIntroduction then
+          if
+            info.publicAdminEmails == []
+              && not info.pendingIntroduction then
             H.modify_ _ { screen = BootstrapScreen }
           else
             H.modify_ _ { screen = NonMemberScreen info }
@@ -331,32 +346,57 @@ checkMembershipAndLoad key = do
       H.modify_ _
         { error = Just ("Fetch failed: " <> show res.status) }
 
+-- | Sign a group event and compute CESR signature.
+signEvent
+  :: Identity
+  -> GroupEvent Unit
+  -> Either String String
+signEvent ident evt = do
+  let
+    evtJson = encodeGroupEvent (const jsonNull) evt
+    msgBytes = encodeUtf8 (stringify evtJson)
+    sigBytes = NaCl.sign msgBytes ident.keyPair.secretKey
+  sigPrim <- mkPrimitive Ed25519Sig sigBytes
+  pure (Cesr.encode sigPrim)
+
 -- | Submit a group event to the server.
 submitEvent
   :: forall o m
    . MonadAff m
   => Maybe String
-  -> String
+  -> Identity
   -> GroupEvent Unit
   -> H.HalogenM State Action Slots o m Unit
-submitEvent passphrase signer evt = do
-  let
-    body = encodeSubmission
-      (const jsonNull)
-      { passphrase, signer, event: evt }
-  res <- liftAff $ Fetch.fetch (baseUrl <> "/events")
-    { method: "POST", body: stringify body }
-  if res.status /= 200 then H.modify_ _ { error = Just ("Submit failed: " <> res.body) }
-  else do
-    st <- H.get
-    case st.identity of
-      Just ident -> do
+submitEvent passphrase ident evt =
+  case signEvent ident evt of
+    Left err ->
+      H.modify_ _
+        { error = Just ("Signing failed: " <> err) }
+    Right signature -> do
+      let
+        body = encodeSubmission
+          (const jsonNull)
+          { passphrase
+          , signer: ident.prefix
+          , signature
+          , event: evt
+          }
+      res <- liftAff $ Fetch.fetch
+        (baseUrl <> "/events")
+        { method: "POST", body: stringify body }
+      if res.status /= 200 then
+        H.modify_ _
+          { error =
+              Just ("Submit failed: " <> res.body)
+          }
+      else do
+        st <- H.get
         fetchNewEvents
         -- After bootstrap, re-check membership
         case st.screen of
-          BootstrapScreen -> checkMembershipAndLoad ident.prefix
+          BootstrapScreen ->
+            checkMembershipAndLoad ident.prefix
           _ -> pure unit
-      Nothing -> fetchNewEvents
 
 -- | Fetch all events from the beginning and rebuild state.
 fetchAndReplay
@@ -369,7 +409,8 @@ fetchAndReplay key = do
     go seqNo gs = do
       res <- liftAff $ Fetch.fetch
         ( baseUrl <> "/events?after=" <> show seqNo
-            <> "&key=" <> key
+            <> "&key="
+            <> key
         )
         { method: "GET", body: "" }
       case res.status of
@@ -417,7 +458,8 @@ fetchNewEvents = do
         go seqNo gs = do
           res <- liftAff $ Fetch.fetch
             ( baseUrl <> "/events?after=" <> show seqNo
-                <> "&key=" <> key
+                <> "&key="
+                <> key
             )
             { method: "GET", body: "" }
           case res.status of

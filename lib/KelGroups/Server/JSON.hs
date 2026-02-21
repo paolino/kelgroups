@@ -58,6 +58,8 @@ data Submission a = Submission
     -- ^ Required in bootstrap mode
     , subSigner :: Text
     -- ^ CESR-encoded public key
+    , subSignature :: Text
+    -- ^ CESR-encoded Ed25519 signature
     , subEvent :: GroupEvent a
     -- ^ The event to append
     }
@@ -74,6 +76,7 @@ data ServerError
     = ValidationErr ValidationError
     | PassphraseRequired
     | WrongPassphrase
+    | SignatureError Text
     | BadRequest Text
     deriving stock (Show, Eq)
 
@@ -332,6 +335,11 @@ instance ToJSON ValidationError where
             [ "error" .= ("roleRemovePrecondition" :: Text)
             , "role" .= name
             ]
+    toJSON (InvalidKey k) =
+        object
+            [ "error" .= ("invalidKey" :: Text)
+            , "key" .= k
+            ]
 
 instance FromJSON ValidationError where
     parseJSON = withObject "ValidationError" $ \o -> do
@@ -357,6 +365,8 @@ instance FromJSON ValidationError where
                 RoleAddPrecondition <$> o .: "role"
             "roleRemovePrecondition" ->
                 RoleRemovePrecondition <$> o .: "role"
+            "invalidKey" ->
+                InvalidKey <$> o .: "key"
             _ ->
                 fail $
                     "unknown ValidationError: "
@@ -371,6 +381,7 @@ instance (ToJSON a) => ToJSON (Submission a) where
         object
             [ "passphrase" .= subPassphrase s
             , "signer" .= subSigner s
+            , "signature" .= subSignature s
             , "event" .= subEvent s
             ]
 
@@ -379,6 +390,7 @@ instance (FromJSON a) => FromJSON (Submission a) where
         Submission
             <$> o .:? "passphrase"
             <*> o .: "signer"
+            <*> o .: "signature"
             <*> o .: "event"
 
 -- --------------------------------------------------------
@@ -410,6 +422,11 @@ instance ToJSON ServerError where
     toJSON WrongPassphrase =
         object
             ["error" .= ("wrongPassphrase" :: Text)]
+    toJSON (SignatureError msg) =
+        object
+            [ "error" .= ("signatureError" :: Text)
+            , "message" .= msg
+            ]
     toJSON (BadRequest msg) =
         object
             [ "error" .= ("badRequest" :: Text)
@@ -426,6 +443,8 @@ instance FromJSON ServerError where
                 pure PassphraseRequired
             "wrongPassphrase" ->
                 pure WrongPassphrase
+            "signatureError" ->
+                SignatureError <$> o .: "message"
             "badRequest" ->
                 BadRequest <$> o .: "message"
             _ ->
