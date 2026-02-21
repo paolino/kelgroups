@@ -32,6 +32,9 @@ let
           exec haskell-language-server "$@"
         '')
       ];
+      shellHook = ''
+        echo "packages: ${keri-hs}" > cabal.project.local
+      '';
     };
     cabalProjectLocal = ''
       packages: ${keri-hs}

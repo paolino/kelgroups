@@ -36,6 +36,9 @@ import KelGroups.Types
     , RoleName
     , hasAdmin
     )
+import Keri.Cesr (decode)
+import Keri.Cesr.DerivationCode (DerivationCode (..))
+import Keri.Cesr.Primitive (Primitive (..))
 
 -- | Validation errors for group events.
 data ValidationError
@@ -57,6 +60,8 @@ data ValidationError
       RoleAddPrecondition RoleName
     | -- | Role precondition not met for removal
       RoleRemovePrecondition RoleName
+    | -- | Key is not a valid CESR Ed25519 public key
+      InvalidKey Text
     deriving stock (Show, Eq)
 
 {- | Validate a group event against the current
@@ -108,9 +113,11 @@ validateProposal config gs signer proposal' =
 validateBootstrapProposal
     :: Proposal -> Either ValidationError ()
 validateBootstrapProposal = \case
-    IntroduceMember _ _ roles
-        | hasAdmin roles -> Right ()
-        | otherwise -> Left BootstrapRequiresAdmin
+    IntroduceMember key _ roles -> do
+        requireValidCesrKey key
+        if hasAdmin roles
+            then Right ()
+            else Left BootstrapRequiresAdmin
     _ -> Left BootstrapRequiresAdmin
 
 validateNormalProposal
@@ -120,6 +127,7 @@ validateNormalProposal
     -> Either ValidationError ()
 validateNormalProposal config gs = \case
     IntroduceMember pubKey _email roles -> do
+        requireValidCesrKey pubKey
         requireNotMember pubKey gs
         validateRoleAdditions config gs roles
     RemoveMember pubKey ->
@@ -217,3 +225,14 @@ requireNotMember pubKey gs
     | isMember pubKey gs =
         Left (MemberAlreadyExists pubKey)
     | otherwise = Right ()
+
+{- | Validate that a key is a CESR-encoded Ed25519
+public key.
+-}
+requireValidCesrKey
+    :: Text -> Either ValidationError ()
+requireValidCesrKey key =
+    case decode key of
+        Right Primitive{code = Ed25519PubKey} ->
+            Right ()
+        _ -> Left (InvalidKey key)

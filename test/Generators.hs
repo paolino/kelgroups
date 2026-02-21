@@ -7,8 +7,8 @@ Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 Shared generators for group states, members, roles, and
-proposals. Used by pure invariant specs and store-through
-specs alike.
+proposals. Uses real CESR-encoded Ed25519 public keys
+via keri-hs for all key material.
 -}
 module Generators
     ( arbitraryKey
@@ -25,11 +25,14 @@ module Generators
     , arbitraryNonAdminRoles
     , gsWithAdminCount
     , trivialConfig
+    , makeCesrKey
     ) where
 
+import Data.ByteString qualified as BS
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
+import Data.Word (Word8)
 import KelGroups.Event (Proposal (..))
 import KelGroups.State
     ( GroupState (..)
@@ -43,6 +46,9 @@ import KelGroups.Types
     , Member (..)
     , Role (..)
     )
+import Keri.Cesr.DerivationCode (DerivationCode (..))
+import Keri.Cesr.Encode qualified as Cesr
+import Keri.Cesr.Primitive (Primitive (..))
 import Test.QuickCheck
     ( Arbitrary (..)
     , Gen
@@ -53,6 +59,22 @@ import Test.QuickCheck
     , suchThat
     , vectorOf
     )
+
+-- --------------------------------------------------------
+-- CESR key helpers
+-- --------------------------------------------------------
+
+{- | Build a deterministic CESR-encoded Ed25519 public
+key from a seed byte. Produces 32 bytes padded with
+the seed, then CESR-encodes with code 'D'.
+-}
+makeCesrKey :: Word8 -> Text
+makeCesrKey seed =
+    Cesr.encode
+        Primitive
+            { code = Ed25519PubKey
+            , raw = BS.pack (replicate 32 seed)
+            }
 
 -- --------------------------------------------------------
 -- Arbitrary instances
@@ -101,10 +123,12 @@ instance Arbitrary Proposal where
 -- Key generators
 -- --------------------------------------------------------
 
--- | Random key from a pool of 100.
+{- | Random CESR-encoded Ed25519 public key from a
+pool of 100 deterministic keys.
+-}
 arbitraryKey :: Gen Text
 arbitraryKey =
-    pack . ("key" <>) . show <$> chooseInt (0, 99)
+    makeCesrKey . fromIntegral <$> chooseInt (0, 99)
 
 -- | A key not present in the given group state.
 freshKey :: GroupState () -> Gen Text
@@ -176,7 +200,7 @@ gsWithAdminCount n =
         }
   where
     key :: Int -> Text
-    key i = "admin" <> pack (show i)
+    key i = makeCesrKey (fromIntegral i)
     adminMember :: Text -> Member
     adminMember k =
         Member

@@ -31,8 +31,10 @@ import Data.Aeson
     )
 import Data.ByteString (ByteString)
 import Data.ByteString.Builder qualified as Builder
+import Data.ByteString.Lazy qualified as LBS
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Text.Read qualified as TR
 import KelGroups.Bootstrap (AuthMode (..), authMode)
@@ -62,6 +64,10 @@ import KelGroups.Types
     , Role (..)
     )
 import KelGroups.Validate (validateEvent)
+import Keri.Cesr qualified as Cesr
+import Keri.Cesr.DerivationCode (DerivationCode (..))
+import Keri.Cesr.Primitive (Primitive (..))
+import Keri.Crypto.Ed25519 qualified as Ed25519
 import Network.HTTP.Types
     ( HeaderName
     , Status
@@ -218,7 +224,7 @@ parseAfter req =
 -- --------------------------------------------------------
 
 handlePostEvent
-    :: (Serialise a, FromJSON a)
+    :: (Serialise a, FromJSON a, ToJSON a)
     => ServerEnv a
     -> Application
 handlePostEvent env req respond = do
@@ -237,7 +243,7 @@ handlePostEvent env req respond = do
                     doAppend env sub respond
 
 handleBootstrapPost
-    :: (Serialise a)
+    :: (Serialise a, ToJSON a)
     => ServerEnv a
     -> Submission a
     -> (Response -> IO b)
@@ -260,35 +266,41 @@ handleBootstrapPost env sub respond =
 
 -- | Validate and append the event.
 doAppend
-    :: (Serialise a)
+    :: (Serialise a, ToJSON a)
     => ServerEnv a
     -> Submission a
     -> (Response -> IO b)
     -> IO b
-doAppend env sub respond = do
-    gs <- readState (envStore env)
-    case validateEvent
-        (envConfig env)
-        gs
-        (subSigner sub)
-        (subEvent sub) of
-        Left ve ->
+doAppend env sub respond =
+    case verifySig (subSigner sub) (subSignature sub) (subEvent sub) of
+        Left err ->
             respond $
-                jsonResponse status422 $
-                    ValidationErr ve
+                jsonResponse status401 $
+                    SignatureError err
         Right () -> do
-            appendEvent
-                (envStore env)
-                (envAppFold env)
-                (subSigner sub, subEvent sub)
-            sn <- kelLength (envStore env)
-            atomically $
-                writeTChan (envBroadcast env) sn
-            respond $
-                responseLBS
-                    status200
-                    jsonHeaders
-                    (encode $ AppendResult sn)
+            gs <- readState (envStore env)
+            case validateEvent
+                (envConfig env)
+                gs
+                (subSigner sub)
+                (subEvent sub) of
+                Left ve ->
+                    respond $
+                        jsonResponse status422 $
+                            ValidationErr ve
+                Right () -> do
+                    appendEvent
+                        (envStore env)
+                        (envAppFold env)
+                        (subSigner sub, subEvent sub)
+                    sn <- kelLength (envStore env)
+                    atomically $
+                        writeTChan (envBroadcast env) sn
+                    respond $
+                        responseLBS
+                            status200
+                            jsonHeaders
+                            (encode $ AppendResult sn)
 
 -- --------------------------------------------------------
 -- GET /stream (SSE)
@@ -428,3 +440,41 @@ jsonResponse
     -> Response
 jsonResponse status body =
     responseLBS status jsonHeaders (encode body)
+
+{- | Verify the Ed25519 signature on a submission.
+The signed message is the JSON encoding of the event.
+-}
+verifySig
+    :: (ToJSON a)
+    => Text
+    -- ^ CESR-encoded signer public key
+    -> Text
+    -- ^ CESR-encoded Ed25519 signature
+    -> a
+    -- ^ The event (serialized as JSON for signing)
+    -> Either Text ()
+verifySig signerCesr sigCesr evt = do
+    pk <- decodePubKey signerCesr
+    sig <- decodeSig sigCesr
+    let msg =
+            LBS.toStrict $ encode evt
+    if Ed25519.verify pk msg sig
+        then Right ()
+        else Left "signature verification failed"
+  where
+    decodePubKey t =
+        case Cesr.decode t of
+            Right Primitive{code = Ed25519PubKey, raw} ->
+                case Ed25519.publicKeyFromBytes raw of
+                    Right k -> Right k
+                    Left e -> Left (T.pack e)
+            Right _ ->
+                Left "not an Ed25519 public key"
+            Left e -> Left (T.pack e)
+    decodeSig t =
+        case Cesr.decode t of
+            Right Primitive{code = Ed25519Sig, raw} ->
+                Right raw
+            Right _ ->
+                Left "not an Ed25519 signature"
+            Left e -> Left (T.pack e)

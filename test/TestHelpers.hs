@@ -7,7 +7,8 @@ Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 Reusable test environment, HTTP helpers, submission builders,
-and response decoders for integration tests.
+and response decoders for integration tests. All submissions
+carry real Ed25519 signatures verified by the server.
 -}
 module TestHelpers
     ( -- * Test environment
@@ -21,6 +22,10 @@ module TestHelpers
     , getCondition
     , getInfo
     , decodeOrFail
+
+      -- * Identities (keypair + CESR key)
+    , TestId (..)
+    , newTestId
 
       -- * Submission builders
     , testPass
@@ -41,6 +46,7 @@ module TestHelpers
 import Control.Concurrent.STM (newBroadcastTChanIO)
 import Data.Aeson
     ( FromJSON (..)
+    , ToJSON (..)
     , Value (..)
     , decode
     , encode
@@ -68,12 +74,55 @@ import KelGroups.Trivial
     , trivialInitial
     )
 import KelGroups.Types (Admin (..), Role (..))
+import Keri.Cesr.DerivationCode (DerivationCode (..))
+import Keri.Cesr.Encode qualified as Cesr
+import Keri.Cesr.Primitive (Primitive (..))
+import Keri.Crypto.Ed25519 qualified as Ed25519
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types (status200)
 import Network.Wai.Handler.Warp qualified as Warp
 import System.Directory (removeFile)
 import System.IO.Temp (emptySystemTempFile)
 import Test.Hspec (shouldBe)
+
+-- --------------------------------------------------------
+-- Test identities
+-- --------------------------------------------------------
+
+-- | A test identity: keypair + CESR-encoded public key.
+data TestId = TestId
+    { tidKeyPair :: Ed25519.KeyPair
+    , tidKey :: Text
+    -- ^ CESR-encoded Ed25519 public key
+    }
+
+-- | Generate a fresh test identity.
+newTestId :: IO TestId
+newTestId = do
+    kp <- Ed25519.generateKeyPair
+    let cesrKey =
+            Cesr.encode
+                Primitive
+                    { code = Ed25519PubKey
+                    , raw =
+                        Ed25519.publicKeyBytes
+                            (Ed25519.publicKey kp)
+                    }
+    pure TestId{tidKeyPair = kp, tidKey = cesrKey}
+
+{- | Sign a JSON-serializable event with a test
+identity. Returns the CESR-encoded Ed25519 signature.
+-}
+signEvent :: (ToJSON a) => TestId -> a -> Text
+signEvent tid evt =
+    let msg = LBS.toStrict (encode evt)
+        sigBytes =
+            Ed25519.sign (tidKeyPair tid) msg
+    in  Cesr.encode
+            Primitive
+                { code = Ed25519Sig
+                , raw = sigBytes
+                }
 
 -- --------------------------------------------------------
 -- Test environment
@@ -179,88 +228,86 @@ decodeOrFail bs = case decode bs of
 -- Submission builders
 -- --------------------------------------------------------
 
--- | Bootstrap the first admin.
-bootstrap :: Text -> Submission ()
-bootstrap key =
+{- | Build a signed submission from a test identity
+and an event.
+-}
+mkSubmission
+    :: TestId
+    -> Maybe Text
+    -> GroupEvent ()
+    -> Submission ()
+mkSubmission tid mPass evt =
     Submission
-        { subPassphrase = Just testPass
-        , subSigner = key
-        , subEvent =
+        { subPassphrase = mPass
+        , subSigner = tidKey tid
+        , subSignature = signEvent tid evt
+        , subEvent = evt
+        }
+
+-- | Bootstrap the first admin.
+bootstrap :: TestId -> Submission ()
+bootstrap tid =
+    let evt =
             Base $
                 Propose $
                     IntroduceMember
-                        key
-                        (key <> "@test.example")
+                        (tidKey tid)
+                        (tidKey tid <> "@test.example")
                         ( Set.singleton
                             (AdminRole PublicAdmin)
                         )
-        }
+    in  mkSubmission tid (Just testPass) evt
 
 -- | Propose a new member with PublicAdmin role.
-proposeAdmin :: Text -> Text -> Submission ()
-proposeAdmin signer newKey =
-    Submission
-        { subPassphrase = Nothing
-        , subSigner = signer
-        , subEvent =
+proposeAdmin :: TestId -> TestId -> Submission ()
+proposeAdmin signer newMember =
+    let evt =
             Base $
                 Propose $
                     IntroduceMember
-                        newKey
-                        (newKey <> "@test.example")
+                        (tidKey newMember)
+                        (tidKey newMember <> "@test.example")
                         ( Set.singleton
                             (AdminRole PublicAdmin)
                         )
-        }
+    in  mkSubmission signer Nothing evt
 
 -- | Propose a new member with no roles.
-proposeMember :: Text -> Text -> Submission ()
-proposeMember signer newKey =
-    Submission
-        { subPassphrase = Nothing
-        , subSigner = signer
-        , subEvent =
+proposeMember :: TestId -> TestId -> Submission ()
+proposeMember signer newMember =
+    let evt =
             Base $
                 Propose $
                     IntroduceMember
-                        newKey
-                        (newKey <> "@test.example")
+                        (tidKey newMember)
+                        (tidKey newMember <> "@test.example")
                         Set.empty
-        }
+    in  mkSubmission signer Nothing evt
 
 -- | Propose removing a member.
-proposeRemove :: Text -> Text -> Submission ()
-proposeRemove signer targetKey =
-    Submission
-        { subPassphrase = Nothing
-        , subSigner = signer
-        , subEvent =
+proposeRemove :: TestId -> TestId -> Submission ()
+proposeRemove signer target =
+    let evt =
             Base $
                 Propose $
-                    RemoveMember targetKey
-        }
+                    RemoveMember (tidKey target)
+    in  mkSubmission signer Nothing evt
 
 -- | Propose changing a member's roles.
 proposeChangeRoles
-    :: Text -> Text -> Set.Set Role -> Submission ()
-proposeChangeRoles signer targetKey roles =
-    Submission
-        { subPassphrase = Nothing
-        , subSigner = signer
-        , subEvent =
+    :: TestId -> TestId -> Set.Set Role -> Submission ()
+proposeChangeRoles signer target roles =
+    let evt =
             Base $
                 Propose $
-                    ChangeRoles targetKey roles
-        }
+                    ChangeRoles (tidKey target) roles
+    in  mkSubmission signer Nothing evt
 
 -- | Approve a pending proposal.
-approve :: Text -> Text -> Submission ()
+approve :: TestId -> Text -> Submission ()
 approve signer proposalId =
-    Submission
-        { subPassphrase = Nothing
-        , subSigner = signer
-        , subEvent = Base $ Approve proposalId
-        }
+    let evt = Base $ Approve proposalId
+    in  mkSubmission signer Nothing evt
 
 -- --------------------------------------------------------
 -- Response decoders

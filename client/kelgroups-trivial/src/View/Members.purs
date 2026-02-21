@@ -181,8 +181,7 @@ handleAction = case _ of
     when (st.newMemberKey /= "" && st.newMemberEmail /= "") do
       let
         roles =
-          if st.newMemberAdmin
-            then Set.singleton (AdminRole PublicAdmin)
+          if st.newMemberAdmin then Set.singleton (AdminRole PublicAdmin)
           else Set.empty
       H.raise
         ( SubmitPropose
