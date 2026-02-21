@@ -27,7 +27,7 @@
 | `KelGroups.Validate` | Event validation with `ValidationError` ADT |
 | `KelGroups.Bootstrap` | `AuthMode` detection (bootstrap vs normal) |
 | `KelGroups.Trivial` | Trivial instance: `a = ()`, no app roles |
-| `KelGroups.Store` | SQLite-backed KEL store with KERI events and digest chain |
+| `KelGroups.Store` | SQLite-backed KEL store with KERI events, digest chain, and server identity |
 | `KelGroups.Server` | WAI application: routing, KERI event construction, SSE streaming |
 | `KelGroups.Server.JSON` | Orphan `ToJSON`/`FromJSON` instances + HTTP types (`Submission`, `AppendResult`, `ServerError`) |
 
@@ -108,12 +108,15 @@ data KELStore a = KELStore
   , stateVar :: TVar (GroupState a)
   , tipVar :: TVar (Maybe ChainTip)
   , lengthVar :: TVar Int
+  , serverKeyPair :: KeyPair       -- Ed25519 server identity
+  , serverCesrKey :: Text          -- CESR-encoded server public key
   }
 
 data ChainTip = ChainTip
   { tipPrefix :: Text, tipSeqNo :: Int, tipDigest :: Text }
 
 openKEL :: FromJSON a => AppFold a -> a -> FilePath -> IO (KELStore a)
+closeKEL :: KELStore a -> IO ()
 appendEvent :: ToJSON a => KELStore a -> AppFold a -> Text -> Event -> Text -> GroupEvent a -> IO ()
 readState :: KELStore a -> IO (GroupState a)
 readEventsFrom :: KELStore a -> Int -> IO [StoredEvent]
@@ -121,7 +124,9 @@ kelLength :: KELStore a -> IO Int
 chainTip :: KELStore a -> IO (Maybe ChainTip)
 ```
 
-Events are stored as KERI canonical JSON (via `serializeEvent` from keri-hs) in SQLite alongside the group event anchor, signer key, signature, and denormalized chain metadata (prefix, sequence number, digest). The in-memory `TVar` state is updated incrementally on each append. On `openKEL`, group events are replayed from the `group_event` column and the chain tip is recovered from the last row's metadata.
+Events are stored as KERI canonical JSON (via `serializeEvent` from keri-hs) in SQLite alongside the group event anchor, signer key, signature, and denormalized chain metadata (prefix, sequence number, digest). The in-memory `TVar` state is updated incrementally on each append.
+
+On first `openKEL`, the store generates a server Ed25519 keypair (persisted in a singleton `server_identity` table) and creates an L1 inception event (event 0) signed by the server key. The group identifier is the inception event's SAID (available as `tipPrefix` immediately after open). On subsequent opens, the keypair is loaded from the table and all group events are replayed from the `group_event` column to rebuild in-memory state. The chain tip is recovered from the last row's metadata.
 
 ### Server
 
@@ -132,7 +137,7 @@ HTTP interface via warp + wai with JSON encoding (aeson).
 | `/condition` | GET | Current group state + auth mode |
 | `/events?after=N` | GET | First event after sequence number N |
 | `/events` | POST | Submit a `Submission` (signer + signature + priorDigest + event) |
-| `/info` | GET | Public admin emails + pending introduction status |
+| `/info` | GET | Public admin emails, pending status, server key, group identifier |
 | `/stream` | GET | SSE stream — emits `event: new` with `{"sn":N}` on each append |
 
 **SSE mechanism:** Each client gets a `dupTChan` copy of the broadcast channel. Disconnection is handled by warp (thread dies, TChan is GC'd).

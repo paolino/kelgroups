@@ -10,6 +10,9 @@ domain-specific semantics.
 - **KERI event format** — events are KERI inception/interaction events
   with group events as JSON anchors, serialized via
   [keri-hs](https://github.com/paolino/keri-hs)
+- **Server identity** — server generates its own Ed25519 keypair on
+  first start; L1 event 0 is the server inception, establishing the
+  group identifier (SAID)
 - **Hash-chained storage** — every event carries `priorDigest`, forming
   a tamper-evident chain backed by SQLite
 - **Ed25519 signatures** — all submissions are signed and verified

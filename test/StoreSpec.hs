@@ -25,6 +25,7 @@ import KelGroups.Store
     ( ChainTip (..)
     , StoredEvent (..)
     , appendEvent
+    , chainTip
     , closeKEL
     , kelLength
     , openKEL
@@ -127,7 +128,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                 len <- kelLength store
                 closeKEL store
                 gs `shouldBe` emptyState trivialInitial
-                len `shouldBe` 0
+                -- Server inception is auto-created
+                len `shouldBe` 1
 
     describe "roundtrip" $ do
         prop "signers match after append+read" $
@@ -140,7 +142,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 trivialFold
                                 trivialInitial
                                 path
-                        tipRef <- newIORef Nothing
+                        tip0 <- chainTip store
+                        tipRef <- newIORef tip0
                         forM_ events $
                             \(signer, groupEvt) -> do
                                 tip <-
@@ -170,8 +173,9 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                                 eventDigest
                                                     keriEvt
                                             }
+                        -- Skip server inception (id=1)
                         replayed <-
-                            readEventsFrom store 1
+                            readEventsFrom store 2
                         closeKEL store
                         pure
                             ( map fst events
@@ -193,7 +197,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 trivialFold
                                 trivialInitial
                                 path
-                        tipRef <- newIORef Nothing
+                        tip0 <- chainTip store
+                        tipRef <- newIORef tip0
                         forM_ events $
                             \(signer, groupEvt) -> do
                                 tip <-
@@ -270,7 +275,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 RemoveMember "k2"
                         )
                     ]
-            tipRef <- newIORef Nothing
+            tip0 <- chainTip store
+            tipRef <- newIORef tip0
             forM_ events $ \(signer, groupEvt) -> do
                 tip <- readIORef tipRef
                 let keriEvt =
@@ -293,7 +299,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                             , tipDigest =
                                 eventDigest keriEvt
                             }
-            tail' <- readEventsFrom store 2
+            -- Client events at ids 2,3,4; skip first
+            tail' <- readEventsFrom store 3
             closeKEL store
             map seSigner tail'
                 `shouldBe` map fst (drop 1 events)
@@ -305,6 +312,7 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                         trivialFold
                         trivialInitial
                         path
+                tip0 <- chainTip store
                 let signer = "s"
                     groupEvt :: GroupEvent ()
                     groupEvt =
@@ -317,7 +325,7 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                         (AdminRole PublicAdmin)
                                     )
                     keriEvt =
-                        mkKeriEvent Nothing signer groupEvt
+                        mkKeriEvent tip0 signer groupEvt
                 appendEvent
                     store
                     trivialFold
@@ -330,7 +338,7 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                 tail' `shouldBe` []
 
     describe "kelLength" $ do
-        prop "length matches number of appends" $
+        prop "length matches number of appends + 1" $
             monadicIO $ do
                 events <- pick arbitraryBaseEvents
                 len <- run $
@@ -340,7 +348,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 trivialFold
                                 trivialInitial
                                 path
-                        tipRef <- newIORef Nothing
+                        tip0 <- chainTip store
+                        tipRef <- newIORef tip0
                         forM_ events $
                             \(signer, groupEvt) -> do
                                 tip <-
@@ -373,4 +382,5 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                         l <- kelLength store
                         closeKEL store
                         pure l
-                assert $ len == length events
+                -- +1 for the server inception
+                assert $ len == length events + 1

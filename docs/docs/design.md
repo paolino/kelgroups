@@ -105,17 +105,19 @@ data Proposal
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Bootstrap : empty KEL
+    [*] --> ServerInception : openKEL (first start)
+    ServerInception --> Bootstrap : event 0 = server inception
     Bootstrap --> Normal : first member introduced with admin role
     Normal --> Normal : events signed by known members
     Normal --> Bootstrap : zero admins remaining
     Bootstrap --> Normal : admin introduced via passphrase auth
 ```
 
-- **Empty KEL** or **zero admins** triggers bootstrap mode.
+- **Event 0** is always the server's own KERI inception event (Ed25519 keypair generated on first start). The group identifier is the SAID of this event.
+- **Empty members** or **zero admins** triggers bootstrap mode.
 - The server receives a **passphrase via CLI arguments** at startup.
 - In bootstrap mode, clients authenticate via **passphrase challenge** instead of signatures.
-- The first event **must** introduce a member with the admin role — otherwise it is rejected.
+- The first client event (event 1) **must** introduce a member with the admin role — otherwise it is rejected.
 - After the first admin is introduced, the system transitions to **normal mode** (signature-based auth).
 - If all admins are removed, bootstrap mode **reactivates** — the passphrase is the permanent fallback. The system is never dead.
 

@@ -50,6 +50,7 @@ import KelGroups.Store
     ( ChainTip (..)
     , KELStore
     , appendEvent
+    , chainTip
     , closeKEL
     , openKEL
     , readState
@@ -128,7 +129,8 @@ store and return the resulting group state.
 replayHistory
     :: [(Text, GroupEvent ())] -> IO (GroupState ())
 replayHistory events = withStore $ \store -> do
-    tipRef <- newIORef Nothing
+    tip <- chainTip store
+    tipRef <- newIORef tip
     forM_ events $ appendTestEvent store tipRef
     readState store
 
