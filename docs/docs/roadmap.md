@@ -18,7 +18,7 @@ type that implements it.
 | **Self-certifying identifier** | The identifier IS the hash of the inception event — no external registry needed | `Keri.Event`, `Keri.Crypto.Digest` | `eventDigest`, `eventPrefix`, `computeSaid` |
 | **Signed events** | Every KEL entry carries Ed25519 signatures; the key state determines which keys are valid | `Keri.Kel`, `Keri.KeyState.Verify` | `SignedEvent { event, signatures }`, `verifySignatures` |
 | **Digest chain** | Each event includes the hash of its predecessor, forming a tamper-evident chain | `Keri.Event` | `priorDigest` field on `RotationData` / `InteractionData` |
-| **SAID** | Self-Addressing Identifier — the event's own digest field is computed over a serialization that contains a placeholder, then replaced with the real hash | `Keri.Crypto.Digest` | `computeSaid`, `saidPlaceholder` (44 `#` characters) |
+| **SAID** | Self-Addressing Identifier — the event's own digest field is computed over a serialization that contains a placeholder, then replaced with the real hash | `Keri.Crypto.Digest`, `Keri.Crypto.SAID` | `computeSaid`, `saidPlaceholder`, `verifySaid`, `replaceDigest` |
 | **Key rotation** | Current signing keys can be rotated by revealing pre-committed next keys; the commitment is a hash of the future key | `Keri.Event.Rotation`, `Keri.KeyState.PreRotation` | `RotationConfig`, `mkRotation`, `commitKey` |
 
 ### Supporting concepts
@@ -70,6 +70,7 @@ Side-by-side mapping from kelgroups to KERI.
 | **Server identity** | Server generates Ed25519 keypair on first start, persisted in `server_identity` table |
 | **L1 inception** | Event 0 = server inception via `mkInception`; group identifier = inception SAID |
 | **Server key in /info** | `GET /info` returns `serverKey` (CESR public key) and `groupId` (inception prefix) |
+| **SAID verification** | `verifySaid` rejects events whose digest doesn't match the recomputed SAID — prevents post-creation field tampering. Implemented in keri-hs (`Keri.Crypto.SAID`), keri-purs, and formalized in keri-lean (`KERI.SAID`). Not yet wired into kelgroups Store. |
 
 ### Open Gaps
 
@@ -82,12 +83,38 @@ commitments.
 KERI requires `KeyState` tracking `stateKeys`, `stateNextKeys`,
 `stateSequenceNumber`, `stateLastDigest`, evolving via `applyEvent`.
 
-#### Gap 7: No witnesses or receipts (LOW)
+#### Gap 7: No KEL-managed identities (HIGH)
 
-Current scope: single trusted server. KERI full spec provides witness
-infrastructure for out-of-order delivery, duplicity detection, and
-availability guarantees. Out of scope for now — the server acts as sole
-witness.
+Server and admin keys are bare Ed25519 public keys. Signature verification
+is a direct `Ed25519.verify` call against the raw key. There is no KERI
+identifier (prefix + KEL) for any participant.
+
+In proper KERI, each entity has its own KEL. Signature verification
+resolves through `replay → keyState → verifySignatures`. This is the
+foundation for key rotation, pre-rotation, and recovery — without it,
+a compromised key cannot be rotated out.
+
+keri-hs already provides the full machinery: `Keri.Kel.Append`,
+`Keri.Kel.Replay`, `Keri.KeyState`, `Keri.KeyState.Verify`. The gap
+is integration, not implementation.
+
+#### Gap 8: No witness receipts (LOW — future)
+
+Current scope: single trusted server. KERI's witness infrastructure
+provides independent confirmation of L1 events, out-of-order delivery,
+and availability guarantees. Without witnesses, clients must trust the
+server's L1 chain on its word alone.
+
+#### Gap 9: No duplicity detection (LOW — future)
+
+No mechanism to detect a compromised server publishing conflicting L1
+chains. Requires witnesses (Gap 8) to be meaningful — duplicity is
+detected when witnesses disagree on the KEL contents.
+
+#### Gap 10: No out-of-order event escrow (LOW — future)
+
+L2 approvals that arrive before their predecessors are rejected. An
+escrow mechanism would park them and apply them once predecessors arrive.
 
 ## 4. Architecture: L1/L2 Separation
 
@@ -332,8 +359,8 @@ point (group KEL with challenge-response auth) is still the foundation
 for L1, but the voting mechanism moves to L2 KELs instead of being
 interleaved on L1.
 
-Per-member KELs (option B) remain a future evolution for individual
-key lifecycle management.
+Per-member KELs (option B) are planned as Step 10 — each admin gets
+their own KERI identifier with KEL-managed key state and pre-rotation.
 
 ## 5. Next Steps
 
@@ -385,13 +412,96 @@ to a one-time challenge-response handshake.
 - **Tests:** session lifecycle, expired sessions, key rotation
   invalidates sessions
 
+### Step 9: Wire SAID verification into Store
+
+Prerequisite: SAID verification is implemented in keri-hs (done).
+Integration step — wire `verifySaid` into `kelgroups`' event ingestion.
+
+- Call `verifySaid` in `Store.appendEvent` before persisting
+- Reject events whose SAID doesn't match the recomputed digest
+- Mirror in keri-purs client for client-side verification
+- **Tests:** tampered events rejected by Store, round-trip with
+  valid events unaffected
+
+### Step 10: KEL-managed identities
+
+Closes **Gap 7**. The foundational step for proper KERI crypto — each
+participant gets a KERI identifier instead of a bare key.
+
+- Server has its own KEL (inception at startup, maintained in memory +
+  SQLite). Signature verification for L1 goes through `replay →
+  keyState → verifySignatures`.
+- Each admin has their own KEL (provided at introduction, stored per
+  member). Signature verification for L2 approvals resolves through
+  the admin's key state, not the raw key.
+- `GroupState.members` keys become KERI prefixes (SAID of inception)
+  instead of raw CESR public keys. Current signing keys are resolved
+  via KEL replay.
+- The keri-hs machinery already exists: `Keri.Kel.Append`,
+  `Keri.Kel.Replay`, `Keri.KeyState`, `Keri.KeyState.Verify`. The
+  work is integration and storage.
+- **Lean:** formalize that L1/L2 signer resolution goes through key
+  state, not raw keys
+- **Tests:** member introduction with KEL, signature verification via
+  key state, reject events signed by revoked keys
+
+### Step 11: Key rotation for participants
+
+Depends on Step 10. Once identities are KEL-managed, participants can
+rotate keys using KERI's pre-rotation mechanism.
+
+- Admins submit rotation events to their own KEL before signing with
+  new keys. The server verifies the rotation (pre-rotation commitment
+  check) and updates the stored KEL.
+- Server can rotate its own key (rotation event on its KEL, all
+  subsequent L1 events signed with the new key).
+- Compromise recovery: if an admin key is compromised, the admin
+  rotates to the pre-committed next key. The compromised key is no
+  longer valid for approvals.
+- Session invalidation (Step 8): key rotation invalidates existing
+  sessions for that identity.
+- keri-hs already has: `mkRotation`, `commitKey`, `applyEvent` with
+  pre-rotation verification.
+- **Tests:** rotation round-trip, signature with old key rejected
+  after rotation, pre-rotation commitment verified, compromised key
+  recovery scenario
+
+### Step 12: Witness receipts
+
+Closes **Gap 8**. Independent confirmation of L1 events.
+
+- Configurable set of witness keys (set at server inception, updatable
+  via rotation with `WitnessConfig`).
+- Witnesses receipt L1 events — each receipt is a KERI receipt event
+  (`Rct`) signed by the witness key.
+- Server collects receipts before considering L1 events confirmed.
+- Clients can verify receipts independently — they don't need to trust
+  the server's claim that an event was receipted.
+- keri-hs has the `Receipt` event type and receipt handling in
+  `KeyState` (`receipt_neutral` theorem in keri-lean).
+- **Tests:** receipt collection, receipt verification, witness
+  threshold enforcement
+
+### Step 13: Duplicity detection
+
+Closes **Gap 9**. Depends on Step 12 (witnesses).
+
+- Detect conflicting KELs when witnesses disagree on event content
+  at the same sequence number.
+- Flag and quarantine conflicting events.
+- Alert mechanism for clients to detect server misbehavior.
+- **Lean:** formalize duplicity as two valid but conflicting chains
+  sharing a prefix
+
 ## 6. Out of Scope
 
-These KERI features are explicitly deferred:
+These KERI features are not needed for kelgroups:
 
-- **Per-member KELs** — each member as their own KERI identifier
-- **Key rotation** — pre-committed next keys and rotation events
-- **Witness/receipt infrastructure** — out-of-band availability and
-  duplicity detection
-- **OOBI protocol** — out-of-band introduction for discovering KELs
-- **Delegated identifiers** — hierarchical identifier delegation
+- **Weighted thresholds** — kelgroups uses simple admin majority, not
+  fractional weighted signing thresholds
+- **Delegated identifiers** — no hierarchical identifier delegation;
+  admin identities are independent
+- **OOBI protocol** — out-of-band introduction for discovering KELs;
+  kelgroups has a centralized server that stores all participant KELs
+- **Indirect mode networking** — witness-mediated message delivery;
+  kelgroups uses direct HTTP
