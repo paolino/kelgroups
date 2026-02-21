@@ -195,6 +195,52 @@ def l1EnactmentComplete (e : L1Event) (adminCnt : Nat) : Prop :=
   | _ => True
 
 -- ============================================================
+-- Transition functions (state machine actions)
+-- ============================================================
+
+/-- Create an L2 with inception event. The proposing admin signs. -/
+def mkL2
+    (prop : Proposal) (nonce : Nonce) (timeout : Nat)
+    (adminKey : Key) (sig : Signature) : L2 :=
+  [KELEvent.mk 0 none (.inception prop nonce timeout) adminKey sig]
+
+/-- Append an approval to an L2. The approving admin signs.
+Requires the digest of the current tip and the proposal SAID. -/
+def appendApproval
+    (l2 : L2) (adminKey : Key) (sig : Signature)
+    (proposalSAID : SAID) (tipDigest : Digest) : L2 :=
+  let seqN := match l2.head? with
+    | some e => e.sequenceNumber + 1
+    | none => 0
+  KELEvent.mk seqN (some tipDigest)
+    (.approval proposalSAID) adminKey sig :: l2
+
+/-- Create an L1 with server inception event. -/
+def mkL1 (serverK : Key) (sig : Signature) : L1 :=
+  [KELEvent.mk 0 none (.inception serverK) serverK sig]
+
+/-- Append an enacted event to L1. The server signs. -/
+def appendEnacted
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (proofs : List ApprovalProof)
+    (tipDigest : Digest) : L1 :=
+  let seqN := match l1.head? with
+    | some e => e.sequenceNumber + 1
+    | none => 0
+  KELEvent.mk seqN (some tipDigest)
+    (.enacted proposalSAID proofs) serverK sig :: l1
+
+/-- Append an expired event to L1. The server signs. -/
+def appendExpired
+    (l1 : L1) (serverK : Key) (sig : Signature)
+    (proposalSAID : SAID) (tipDigest : Digest) : L1 :=
+  let seqN := match l1.head? with
+    | some e => e.sequenceNumber + 1
+    | none => 0
+  KELEvent.mk seqN (some tipDigest)
+    (.expired proposalSAID) serverK sig :: l1
+
+-- ============================================================
 -- Combined system validity
 -- ============================================================
 
