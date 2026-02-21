@@ -1,8 +1,8 @@
-# KERI Bridge: Gap Analysis
+# Roadmap
 
 This document maps kelgroups concepts to [KERI](https://keri.one) concepts,
-identifies the exact gaps between the current implementation and KERI
-compliance, and outlines an incremental path to close them.
+tracks the gaps between the current implementation and full KERI compliance,
+and outlines the path forward.
 
 The reference KERI implementation is
 [keri-hs](https://github.com/paolino/keri-hs), already available in the
@@ -10,7 +10,7 @@ project's nix flake.
 
 ## 1. KERI Primer
 
-Five core concepts that kelgroups needs to understand, each with the keri-hs
+Five core concepts that kelgroups builds on, each with the keri-hs
 type that implements it.
 
 | Concept | What it is | keri-hs module | Type / function |
@@ -25,7 +25,7 @@ type that implements it.
 
 - **CESR encoding** — all cryptographic material (keys, digests, signatures)
   is encoded as self-framing Base64url text with a derivation-code prefix.
-  Types: `Ed25519PubKey` (`"D"`), `Blake2bDigest` (`"E"`),
+  Types: `Ed25519PubKey` (`"D"`), `Blake2bDigest` (`"F"`),
   `Ed25519Sig` (`"0B"`). Module: `Keri.Cesr.*`.
 
 - **Interaction anchors** — interaction events carry arbitrary JSON anchors
@@ -40,97 +40,51 @@ type that implements it.
 
 Side-by-side mapping from kelgroups to KERI.
 
-| kelgroups concept | Current implementation | KERI equivalent | keri-hs reference |
+| kelgroups concept | Implementation | KERI equivalent | keri-hs reference |
 |---|---|---|---|
-| **Group bootstrap** | Passphrase + first `IntroduceMember` proposal. `authMode` in `Bootstrap.hs:19-25` switches on `adminCount == 0`. | **Inception event** with initial keys and signing threshold | `mkInception :: InceptionConfig -> Event` |
-| **Member key** | `memberKey :: Text` in `Types.hs:64-72` — trusted, never validated | **CESR-encoded Ed25519 public key** validated on decode | `Cesr.decode :: Text -> Either String Primitive` |
-| **Event signer** | `subSigner :: Text` field in `Server/JSON.hs:55-63` — passed through unchecked | **Indexed signature** verified against key state | `verifySignatures keys threshold msg sigs` |
-| **Proposal** | `Base (Propose proposal)` in `Event.hs:37-42` | **Interaction anchor** carrying proposal JSON | `InteractionConfig { ixAnchors = [proposalJson] }` |
-| **Approval** | `Base (Approve pid)` in `Event.hs:37-42` | **Interaction anchor** carrying approval reference | same, with anchor referencing proposal SAID |
-| **Proposal digest** | `computeSaid` over canonical JSON of proposal content | **SAID** of the proposal interaction event | `computeSaid` over `serializeEvent` bytes |
-| **Event storage** | SQLite with KERI canonical JSON (`serializeEvent`) + denormalized chain metadata (prefix, seq_no, digest) | **KEL** with digest chain | `mkInception`, `mkInteraction`, `serializeEvent` |
+| **Group bootstrap** | Passphrase-gated inception event via `mkInception` with first admin's key | **Inception event** with initial keys and signing threshold | `mkInception :: InceptionConfig -> Event` |
+| **Member key** | CESR-encoded Ed25519 public key, validated on introduction via `Cesr.decode` | **CESR-encoded Ed25519 public key** | `Cesr.decode :: Text -> Either String Primitive` |
+| **Event signer** | Ed25519 signature verified against serialized KERI event bytes | **Indexed signature** verified against key state | `Ed25519.verify`, `serializeEvent` |
+| **Proposal** | `Base (Propose proposal)` anchored in KERI interaction event | **Interaction anchor** carrying proposal JSON | `InteractionConfig { ixAnchors = [proposalJson] }` |
+| **Approval** | `Base (Approve pid)` anchored in KERI interaction event | **Interaction anchor** carrying approval reference | same, with anchor referencing proposal SAID |
+| **Proposal digest** | `computeSaid` over canonical JSON of proposal content | **SAID** of the proposal | `computeSaid` over `serializeEvent` bytes |
+| **Event storage** | SQLite with KERI canonical JSON + denormalized chain metadata (prefix, seq_no, digest) | **KEL** with digest chain | `mkInception`, `mkInteraction`, `serializeEvent` |
 | **Event serialization** | Canonical JSON via keri-hs `serializeEvent` | **Canonical JSON** with deterministic field order | `serializeEvent :: Event -> ByteString` |
-| **Admin majority** | `majority gs = (adminCount gs + 1) \`div\` 2` in `State.hs:66-73` | **Signing threshold** (`kt` field in events) | `stateSigningThreshold` in `KeyState` |
+| **Digest chain** | Every event carries `priorDigest`; stale-tip detection rejects outdated submissions | **Hash chain** via `priorDigest` on interaction events | `priorDigest` field on `InteractionData` |
+| **Admin majority** | `majority gs = (adminCount gs + 1) \`div\` 2` | **Signing threshold** (`kt` field in events) | `stateSigningThreshold` in `KeyState` |
 | **Key state** | Not tracked — members map is flat | `KeyState` with current keys, next commitments, sequence number | `applyEvent :: KeyState -> Event -> Either String KeyState` |
 
-## 3. The Gaps
+## 3. Current Status
 
-Concrete list of what kelgroups does NOT implement, ordered by severity.
+### Completed
 
-### Gap 1: ~~No signature verification~~ — CLOSED
+| Feature | What it delivers |
+|---|---|
+| **Ed25519 signatures** | Server verifies every submission against serialized KERI event bytes |
+| **CESR key validation** | Member keys must be valid CESR-encoded Ed25519 public keys |
+| **SAID proposal digests** | `proposalDigest` uses `computeSaid` over canonical JSON |
+| **Hash-chained events** | KERI inception + interaction events with `priorDigest` linking |
+| **Canonical JSON** | Events serialized via keri-hs `serializeEvent`, CBOR removed |
+| **Stale-tip detection** | 409 rejection when `priorDigest` doesn't match current chain tip |
+| **Client-side verification** | Clients receive full KERI events + signatures, can verify the chain independently |
 
-Server verifies Ed25519 signatures on all event submissions. PureScript
-client signs events before submitting. Implemented on `feat/keri-bridge`.
+### Open Gaps
 
-**Caveat:** Clients do not yet verify signatures on events fetched from
-the server. This is addressed by [#13](https://github.com/paolino/kelgroups/issues/13).
+#### Gap 6: No key state machine (MEDIUM)
 
----
+`GroupState` has a flat `members :: Map Text Member`. There is no concept
+of current vs. next keys, no per-member sequence numbers, no pre-rotation
+commitments.
 
-### Gap 2: ~~No self-certifying identifiers~~ — CLOSED
+KERI requires `KeyState` tracking `stateKeys`, `stateNextKeys`,
+`stateSequenceNumber`, `stateLastDigest`, evolving via `applyEvent`.
 
-Member keys are validated as CESR-encoded Ed25519 public keys on
-introduction. `InvalidKey` validation error rejects anything else.
-Implemented on `feat/keri-bridge`.
+#### Gap 7: No witnesses or receipts (LOW)
 
-**Caveat:** Keys are self-certifying in the sense that they are the
-public key itself, but not yet KERI self-certifying identifiers (SAID of
-inception event). That requires Gap 6 (group inception).
-
----
-
-### Gap 3: ~~No SAID~~ — CLOSED
-
-Proposal digests now use `computeSaid` over canonical JSON serialization
-of the proposal content via keri-hs. `ProposalId` = SAID of the
-proposal. Implemented on `feat/keri-bridge`.
-
----
-
-### Gap 4: ~~No digest chain~~ — CLOSED
-
-Events are stored as KERI events (inception + interactions) with
-hash-chaining via `priorDigest`. Each interaction event references the
-digest of its predecessor. Clients sign over the serialized KERI event
-(which includes `priorDigest`), committing to the entire history.
-Stale-tip detection rejects submissions referencing an outdated chain
-tip. Implemented on `feat/keri-bridge`.
-
-See [#13](https://github.com/paolino/kelgroups/issues/13).
-
----
-
-### Gap 5: ~~No canonical serialization~~ — CLOSED
-
-Events are serialized via keri-hs `serializeEvent` (canonical JSON with
-protocol-defined field ordering). CBOR serialization (`Store/Serialise.hs`)
-has been removed. Implemented on `feat/keri-bridge`.
-
----
-
-### Gap 6: No key state machine (MEDIUM)
-
-**Design doc claims:** the group tracks membership.
-
-**Code does:** `GroupState` in `State.hs:34-41` has a flat `members :: Map Text Member`.
-There is no concept of current vs. next keys, no sequence numbers,
-no pre-rotation commitments.
-
-**KERI requires:** `KeyState` tracks `stateKeys`, `stateNextKeys`,
-`stateSequenceNumber`, `stateLastDigest`, and evolves via `applyEvent`.
-
-**keri-hs:** `Keri.KeyState.applyEvent`, `Keri.KeyState.initialState`.
-
----
-
-### Gap 7: No witnesses or receipts (LOW)
-
-**Current scope:** single trusted server.
-
-**KERI full spec:** witness infrastructure provides out-of-order delivery,
-duplicity detection, and availability guarantees.
-
-**Decision:** out of scope for now. The server acts as sole witness.
+Current scope: single trusted server. KERI full spec provides witness
+infrastructure for out-of-order delivery, duplicity detection, and
+availability guarantees. Out of scope for now — the server acts as sole
+witness.
 
 ## 4. Architecture: L1/L2 Separation
 
@@ -378,108 +332,60 @@ interleaved on L1.
 Per-member KELs (option B) remain a future evolution for individual
 key lifecycle management.
 
-## 5. Incremental Bridge Path
+## 5. Next Steps
 
-Each step is independently shippable and testable.
+### Step 6: Server identifier + L1 inception
 
-### Step 1: Signed events
+Closes **Gap 6** partially. The server becomes a proper KERI entity.
 
-Closes **Gap 1** (no signature verification).
-
-- Add `keri-hs` dependency to `kelgroups.cabal`
-- `Submission` gains `subSignature :: Text` (CESR-encoded Ed25519 signature)
-- Server computes `serializeSubmission sub` and verifies:
-  `Ed25519.verify pubKey msgBytes signature`
-- Reject submissions with invalid signatures
-- **Tests:** generate keypairs, sign submissions, verify round-trip
-- **Files:** `Server.hs`, `Server/JSON.hs`, `kelgroups.cabal`
-
-### Step 2: CESR keys
-
-Closes **Gap 2** (no self-certifying identifiers).
-
-- Member keys must be valid CESR-encoded Ed25519 public keys
-- Validate on `IntroduceMember`: `Cesr.decode key` must succeed and
-  return `Ed25519PubKey`
-- Existing test helpers switch from `"alice"`, `"bob"` to real
-  generated keypairs
-- **Tests:** invalid CESR keys are rejected, valid ones accepted
-- **Files:** `Validate.hs`, test helpers
-
-### Step 3: SAID for proposals — DONE
-
-Closes **Gap 3** (no SAID). Implemented on `feat/keri-bridge`.
-
-- `proposalDigest` uses `computeSaid` over canonical JSON of proposal
-- `ProposalId` = SAID of the proposal
-
-### Step 4: Digest chain — DONE
-
-Closes **Gap 4** (no digest chain). Implemented on `feat/keri-bridge`.
-
-- Group events are anchored in KERI interaction events with `priorDigest`
-- First event is a KERI inception event (`mkInception`)
-- Stale-tip detection rejects submissions with outdated `priorDigest`
-- Clients sign over serialized KERI events, committing to the full chain
-
-### Step 5: Canonical JSON — DONE
-
-Closes **Gap 5** (no canonical serialization). Implemented on `feat/keri-bridge`.
-
-- CBOR (`Store/Serialise.hs`) deleted entirely
-- Events stored as KERI canonical JSON via `serializeEvent` from keri-hs
-- SQLite schema stores both KERI event bytes and group event JSON anchor
-
-### Step 6: Group inception + server identifier
-
-Closes **Gap 6** (no key state machine) partially.
-
-- Bootstrap = group inception event via `mkInception`
-- `InceptionConfig` with initial admin keys and threshold = majority
-- Group identifier = SAID of inception event
-- Server gets its own KERI identifier (keypair + inception event)
-- Server signs L1 events with its own key
-- **Tests:** inception produces valid self-certifying identifier,
-  key state derived correctly, server identity verifiable
-- **Files:** `Bootstrap.hs`, `Server.hs`
+- Server generates its own Ed25519 keypair on first start
+- L1 event 0 = server inception via `mkInception` (server key, threshold=1)
+- Group identifier = SAID of L1 inception event
+- Server signs all L1 events with its own key
+- Bootstrap admin intro becomes the first L1 interaction (not inception)
+- Client-side chain replay starts from the server inception
+- **Lean:** `l1StartsWithInception`, `l1ServerOnly` become testable
+- **Tests:** server identity round-trip, L1 inception verification,
+  group identifier stability
 
 ### Step 7: L2 voting KELs
 
-Implements the L1/L2 separation described in section 4.
+Implements the L1/L2 separation described in section 4. This is the
+largest remaining step — it restructures how proposals and approvals
+flow through the system.
 
-- L2 uses the same KEL infrastructure as L1 (same code path)
-- L2 inception anchors proposal content + timeout
-- L2 interactions restricted to approvals (proposal SAID as anchor)
-- Server rejects any other event type on L2
+- Each proposal creates an L2 KEL (inception = proposal + nonce + timeout)
+- Approvals are L2 interaction events (anchor = proposal SAID)
 - Server monitors L2 for threshold (admin majority) or timeout
-- On threshold: server extracts `(admin-key, signature)` pairs from
-  L2 approvals and writes enacted event on L1 with compact proof
-- On timeout: server writes expired event on L1
-- L2 KELs discarded after resolution
-- Client verifies L1 enacted events by checking embedded approval
-  signatures against current key state
-- **Tests:** voting lifecycle (propose → approve → enact), timeout
-  expiry, approval signature verification from L1 events, L2
-  event type restriction
-- **Files:** `Server.hs`, `Fold.hs`
+- On threshold: extract approval proofs, write enacted event on L1
+- On timeout: write expired event on L1, discard L2
+- L2 event type restriction (only approvals after inception)
+- SAID uniqueness check (reject duplicate proposal SAIDs)
+- Client verifies L1 enacted events from embedded approval signatures
+- **Lean:** `L2Valid` predicates become testable, `thresholdMet` exercised
+- **Tests:** full voting lifecycle (propose → approve → enact), timeout
+  expiry, duplicate rejection, approval signature verification from L1,
+  nonce replay prevention
 
 ### Step 8: HTTP session authentication
 
 Closes [issue #8](https://github.com/paolino/kelgroups/issues/8).
+Currently every request carries a signature. Session auth reduces this
+to a one-time challenge-response handshake.
 
-- Challenge-response: server sends random nonce, client signs with
-  Ed25519 key, server verifies against group key state
-- Session cookie tracking
-- WAI middleware layer
-- **Files:** new `Server/Auth.hs`
+- Server sends random nonce, client signs with Ed25519 key
+- Server verifies signature against current group key state
+- Session cookie or token for subsequent requests
+- WAI middleware layer — transparent to endpoint handlers
+- **Tests:** session lifecycle, expired sessions, key rotation
+  invalidates sessions
 
 ## 6. Out of Scope
 
 These KERI features are explicitly deferred:
 
 - **Per-member KELs** — each member as their own KERI identifier
-- **Key rotation** — pre-committed next keys and rotation events for
-  the group
+- **Key rotation** — pre-committed next keys and rotation events
 - **Witness/receipt infrastructure** — out-of-band availability and
   duplicity detection
 - **OOBI protocol** — out-of-band introduction for discovering KELs
