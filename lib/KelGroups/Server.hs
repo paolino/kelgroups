@@ -53,7 +53,7 @@ import KelGroups.State
     )
 import KelGroups.Store
     ( ChainTip (..)
-    , KELStore
+    , KELStore (..)
     , StoredEvent (..)
     , appendEvent
     , chainTip
@@ -442,8 +442,12 @@ handleInfo env req respond =
                     BadRequest "missing ?key=K"
         Just key -> do
             gs <- readState (envStore env)
+            tip <- chainTip (envStore env)
             let pubEmails = publicAdminEmails gs
                 pending = hasPendingIntro key gs
+                sKey =
+                    serverCesrKey (envStore env)
+                groupId = fmap tipPrefix tip
             respond $
                 responseLBS
                     status200
@@ -454,6 +458,10 @@ handleInfo env req respond =
                                 .= pubEmails
                             , "pendingIntroduction"
                                 .= pending
+                            , "serverKey"
+                                .= sKey
+                            , "groupId"
+                                .= groupId
                             ]
                     )
 

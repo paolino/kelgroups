@@ -31,7 +31,7 @@ import KelGroups.State
     , adminCount
     , majority
     )
-import KelGroups.Store (readState)
+import KelGroups.Store (chainTip, readState)
 import KelGroups.Types (Admin (..), Role (..))
 import StoreTestDSL
     ( appendTestEvent
@@ -155,7 +155,8 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
             roles <- pick arbitraryAdminRoles
             let email = key <> "@test.example"
             gs <- run $ withStore $ \store -> do
-                tipRef <- newIORef Nothing
+                tip <- chainTip store
+                tipRef <- newIORef tip
                 StoreTestDSL.appendTestEvent
                     store
                     tipRef
@@ -174,7 +175,8 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
             roles <- pick arbitraryAdminRoles
             let email = key <> "@test.example"
             gs <- run $ withStore $ \store -> do
-                tipRef <- newIORef Nothing
+                tip <- chainTip store
+                tipRef <- newIORef tip
                 StoreTestDSL.appendTestEvent
                     store
                     tipRef

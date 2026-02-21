@@ -43,6 +43,7 @@ import KelGroups.Server.JSON
     )
 import KelGroups.Store
     ( ChainTip (..)
+    , chainTip
     , closeKEL
     , openKEL
     )
@@ -143,7 +144,8 @@ withTestApp action = do
                 , envPassphrase = testPass
                 , envBroadcast = ch
                 }
-    tipRef <- newIORef Nothing
+    tip0 <- chainTip store
+    tipRef <- newIORef tip0
     result <-
         Warp.testWithApplication
             (pure $ mkApp env Nothing)
@@ -348,7 +350,8 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                         `shouldBe` status200
                     ar <-
                         decodeOrFail (HC.responseBody resp)
-                    sequenceNumber ar `shouldBe` 1
+                    -- Event 2 (server inception is 1)
+                    sequenceNumber ar `shouldBe` 2
 
             it "wrong passphrase returns 401" $
                 \ctx -> do
@@ -430,11 +433,12 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                             HC.defaultManagerSettings
                     (sub, admin1) <-
                         postBootstrap mgr ctx
+                    -- after=1 skips server inception (id=1)
                     resp <-
                         httpGet
                             mgr
                             ctx
-                            ( "/events?after=0&key="
+                            ( "/events?after=1&key="
                                 <> T.unpack (stKey admin1)
                             )
                     HC.responseStatus resp

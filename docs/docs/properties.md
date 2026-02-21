@@ -110,7 +110,7 @@ These test Haskell-specific aspects involving `GroupConfig` or the
 
 QC file: `StoreInvariantsSpec.hs` (no Lean counterpart)
 
-These replay the above invariants through the SQLite store (CBOR
+These replay the above invariants through the SQLite store (JSON
 serialization round-trip), verifying that serialization does not break
 any invariant.
 

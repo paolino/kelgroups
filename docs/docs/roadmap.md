@@ -67,6 +67,9 @@ Side-by-side mapping from kelgroups to KERI.
 | **Canonical JSON** | Events serialized via keri-hs `serializeEvent`, CBOR removed |
 | **Stale-tip detection** | 409 rejection when `priorDigest` doesn't match current chain tip |
 | **Client-side verification** | Clients receive full KERI events + signatures, can verify the chain independently |
+| **Server identity** | Server generates Ed25519 keypair on first start, persisted in `server_identity` table |
+| **L1 inception** | Event 0 = server inception via `mkInception`; group identifier = inception SAID |
+| **Server key in /info** | `GET /info` returns `serverKey` (CESR public key) and `groupId` (inception prefix) |
 
 ### Open Gaps
 
@@ -334,19 +337,21 @@ key lifecycle management.
 
 ## 5. Next Steps
 
-### Step 6: Server identifier + L1 inception
+### Step 6: Server identifier + L1 inception ✓
 
-Closes **Gap 6** partially. The server becomes a proper KERI entity.
+Closed **Gap 6** partially. The server is now a proper KERI entity.
 
-- Server generates its own Ed25519 keypair on first start
-- L1 event 0 = server inception via `mkInception` (server key, threshold=1)
-- Group identifier = SAID of L1 inception event
-- Server signs all L1 events with its own key
-- Bootstrap admin intro becomes the first L1 interaction (not inception)
-- Client-side chain replay starts from the server inception
-- **Lean:** `l1StartsWithInception`, `l1ServerOnly` become testable
-- **Tests:** server identity round-trip, L1 inception verification,
-  group identifier stability
+- ✓ Server generates Ed25519 keypair on first `openKEL`, persisted in
+  `server_identity` SQLite table (singleton row)
+- ✓ L1 event 0 = server inception via `mkInception` (server key,
+  threshold=1, no anchors)
+- ✓ Group identifier = SAID of L1 inception (available as `tipPrefix`
+  after `openKEL`)
+- ✓ `KELStore` extended with `serverKeyPair` and `serverCesrKey`
+- ✓ `GET /info` returns `serverKey` and `groupId`
+- ✓ Bootstrap admin intro is now an interaction event (event 1+), not
+  inception
+- ✓ All 87 tests updated and passing
 
 ### Step 7: L2 voting KELs
 
