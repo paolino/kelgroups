@@ -5,44 +5,19 @@
   section 4. Models: hash-chained KEL, server identity, L2
   per-proposal voting KELs, enactment as compact proof on L1.
 -/
+import KERI.Crypto
+import KERI.Event
+import KERI.KEL
 import KelGroups.Basic
 
 namespace KelGroups
 
--- ============================================================
--- Abstract cryptographic primitives
--- ============================================================
-
-/-- Abstract digest (hash). Equality is decidable. -/
-abbrev Digest := Nat
-
-/-- Abstract SAID (Self-Addressing Identifier). -/
-abbrev SAID := Nat
-
-/-- Abstract signature. -/
-abbrev Signature := Nat
-
-/-- Abstract public key. -/
-abbrev Key := Nat
+open KERI.Crypto
+open KERI.Event
+open KERI.KEL (hashChainValid)
 
 /-- Abstract nonce (client-generated randomness). -/
 abbrev Nonce := Nat
-
--- ============================================================
--- KEL events (shared structure for L1 and L2)
--- ============================================================
-
-/-- A KEL event with a prior digest linking to predecessor. -/
-structure KELEvent (α : Type) where
-  sequenceNumber : Nat
-  priorDigest : Option Digest  -- None for inception (seq 0)
-  payload : α
-  signer : Key
-  signature : Signature
-  deriving Repr
-
-/-- A KEL is a list of events (newest first). -/
-abbrev KEL (α : Type) := List (KELEvent α)
 
 -- ============================================================
 -- L1 event payloads
@@ -93,19 +68,6 @@ abbrev L2 := KEL L2Payload
 -- ============================================================
 -- Predicates for the 12 invariants
 -- ============================================================
-
-/-- INV 1: Hash chain — every non-inception event has a prior
-digest, and sequence numbers are consecutive. -/
-def hashChainValid {α : Type} (kel : KEL α) : Prop :=
-  match kel with
-  | [] => True
-  | [e] => e.sequenceNumber = 0 ∧ e.priorDigest = none
-  | e :: rest =>
-    e.priorDigest.isSome
-    ∧ (match rest.head? with
-       | some prev => e.sequenceNumber = prev.sequenceNumber + 1
-       | none => False)
-    ∧ hashChainValid rest
 
 /-- INV 2: L1 event 0 is the server inception. -/
 def l1StartsWithInception (l1 : L1) : Prop :=
