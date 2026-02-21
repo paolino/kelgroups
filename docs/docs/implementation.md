@@ -10,10 +10,9 @@
 
 **`kelgroups.cabal`** — library + test suite + executable:
 
-- Library depends on `base`, `containers`, `text`, `bytestring`, `serialise`, `sqlite-simple`, `stm`, `aeson`, `http-types`, `wai`
+- Library depends on `base`, `containers`, `text`, `bytestring`, `sqlite-simple`, `stm`, `aeson`, `http-types`, `wai`, `keri-hs`
 - Executable depends on `kelgroups`, `warp`, `stm`, `text`
 - Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm`
-- `keri-hs` dependency wired in nix, activated when needed
 
 ## Library Modules
 
@@ -26,9 +25,8 @@
 | `KelGroups.Validate` | Event validation with `ValidationError` ADT |
 | `KelGroups.Bootstrap` | `AuthMode` detection (bootstrap vs normal) |
 | `KelGroups.Trivial` | Trivial instance: `a = ()`, no app roles |
-| `KelGroups.Store` | SQLite-backed KEL store with incremental TVar state |
-| `KelGroups.Store.Serialise` | Orphan CBOR `Serialise` instances for all event/state types |
-| `KelGroups.Server` | WAI application: routing, handlers, SSE streaming |
+| `KelGroups.Store` | SQLite-backed KEL store with KERI events and digest chain |
+| `KelGroups.Server` | WAI application: routing, KERI event construction, SSE streaming |
 | `KelGroups.Server.JSON` | Orphan `ToJSON`/`FromJSON` instances + HTTP types (`Submission`, `AppendResult`, `ServerError`) |
 
 ### Type Sketch
@@ -106,16 +104,22 @@ validateEvent
 data KELStore a = KELStore
   { storeConn :: Connection
   , stateVar :: TVar (GroupState a)
+  , tipVar :: TVar (Maybe ChainTip)
+  , lengthVar :: TVar Int
   }
 
-openKEL :: Serialise a => AppFold a -> a -> FilePath -> IO (KELStore a)
-appendEvent :: Serialise a => KELStore a -> AppFold a -> (Text, GroupEvent a) -> IO ()
+data ChainTip = ChainTip
+  { tipPrefix :: Text, tipSeqNo :: Int, tipDigest :: Text }
+
+openKEL :: FromJSON a => AppFold a -> a -> FilePath -> IO (KELStore a)
+appendEvent :: ToJSON a => KELStore a -> AppFold a -> Text -> Event -> Text -> GroupEvent a -> IO ()
 readState :: KELStore a -> IO (GroupState a)
-readEventsFrom :: Serialise a => KELStore a -> Int -> IO [(Text, GroupEvent a)]
+readEventsFrom :: KELStore a -> Int -> IO [StoredEvent]
 kelLength :: KELStore a -> IO Int
+chainTip :: KELStore a -> IO (Maybe ChainTip)
 ```
 
-Events are CBOR-encoded (`serialise`) and stored as blobs in a SQLite table. The in-memory `TVar` state is updated incrementally on each append and rebuilt from the DB on `openKEL`.
+Events are stored as KERI canonical JSON (via `serializeEvent` from keri-hs) in SQLite alongside the group event anchor, signer key, signature, and denormalized chain metadata (prefix, sequence number, digest). The in-memory `TVar` state is updated incrementally on each append. On `openKEL`, group events are replayed from the `group_event` column and the chain tip is recovered from the last row's metadata.
 
 ### Server
 
@@ -125,14 +129,15 @@ HTTP interface via warp + wai with JSON encoding (aeson).
 |---|---|---|
 | `/condition` | GET | Current group state + auth mode |
 | `/events?after=N` | GET | First event after sequence number N |
-| `/events` | POST | Submit a `Submission` (passphrase + signer + event) |
+| `/events` | POST | Submit a `Submission` (signer + signature + priorDigest + event) |
+| `/info` | GET | Public admin emails + pending introduction status |
 | `/stream` | GET | SSE stream — emits `event: new` with `{"sn":N}` on each append |
 
 **SSE mechanism:** Each client gets a `dupTChan` copy of the broadcast channel. Disconnection is handled by warp (thread dies, TChan is GC'd).
 
-**POST flow:** Parse JSON → check auth mode (bootstrap requires passphrase, normal accepts signer) → validate event → append to store → broadcast sequence number → respond with `AppendResult`.
+**POST flow:** Parse JSON → check auth mode (bootstrap requires passphrase, normal requires member) → construct KERI event (inception for bootstrap, interaction for normal) → verify Ed25519 signature against serialized KERI event → check `priorDigest` matches current chain tip (stale-tip detection) → validate business event → append to store → broadcast sequence number → respond with `AppendResult`.
 
-**Error codes:** 400 (bad JSON), 401 (wrong/missing passphrase), 404 (unknown route or no event), 422 (validation error).
+**Error codes:** 400 (bad JSON), 401 (wrong/missing passphrase), 403 (non-member access), 404 (unknown route or no event), 409 (stale tip — another client appended first), 422 (validation error).
 
 **Executable:** `kelgroups-server <port> <db-path> <passphrase>` — opens a SQLite KEL, creates broadcast channel, runs warp.
 
@@ -163,17 +168,21 @@ Transition invariants proven in `lean/KelGroups/TransitionInvariants.lean`:
 
 ## QuickCheck Properties
 
-Three tiers of properties mirror the Lean theorems:
+Properties and integration tests organized by layer:
 
 | Test module | Scope | Count |
 |---|---|---|
-| `InvariantsSpec` | Pure state invariants | 11 |
-| `TransitionInvariantsSpec` | Pure transition invariants | 8 |
+| `InvariantsSpec` | Pure state invariants (Lean mirrors) | 11 |
+| `TransitionInvariantsSpec` | Pure transition invariants (Lean mirrors) | 8 |
+| `FoldInvariantsSpec` | Fold-level properties (app events, approve, changeRoles) | 5 |
+| `ValidateSpec` | Validation rule coverage (bootstrap, membership, roles) | 14 |
 | `StoreSpec` | Store mechanics (roundtrip, fold consistency, readEventsFrom, kelLength) | 6 |
-| `StoreInvariantsSpec` | Lean invariants through CBOR + SQLite roundtrip | 13 |
-| `ServerSpec` | HTTP endpoints, SSE, auth, validation errors | 11 |
+| `StoreInvariantsSpec` | Lean invariants through KERI event + SQLite roundtrip | 13 |
+| `ServerSpec` | HTTP endpoints, SSE, auth, validation errors | 13 |
+| `E2ESpec` | End-to-end multi-admin governance flows | 14 |
+| `MultiClientSpec` | Concurrent clients, stale-tip rejection, SSE notifications | 3 |
 
-**Total: 49 tests.**
+**Total: 87 tests.**
 
 ### Store-through DSL
 
@@ -187,10 +196,10 @@ onReachable :: (GroupState () -> Bool) -> Property
 onReachableWhere :: (GroupState () -> Bool) -> (GroupState () -> Bool) -> Property
 
 -- Lean: theorem foo (gs) (mid) (roles) : P (f gs mid roles)
-onReachableWith :: Gen [SignedEvent] -> (GroupState () -> Gen Bool) -> Property
+onReachableWith :: Gen [(Text, GroupEvent ())] -> (GroupState () -> Gen Bool) -> Property
 ```
 
-The `arbitraryHistory` generator produces valid event histories by tracking state: bootstrap first, then random proposals from live admins. States are reached through the full store pipeline (CBOR encode → SQLite write → reopen → decode → fold).
+The `arbitraryHistory` generator produces valid event histories by tracking state: bootstrap first, then random proposals from live admins. States are reached through the full store pipeline (KERI event construction → SQLite write → reopen → decode → fold).
 
 ## CI
 

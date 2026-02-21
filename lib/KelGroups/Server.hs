@@ -5,15 +5,17 @@ Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 WAI application providing JSON endpoints for group
-management and SSE notifications. Manual routing on
-method + path.
+management and SSE notifications. Constructs KERI
+events (inception for bootstrap, interaction for
+normal operations) and verifies signatures against
+serialized KERI event bytes.
 -}
 module KelGroups.Server
     ( ServerEnv (..)
     , mkApp
+    , mkKeriEvent
     ) where
 
-import Codec.Serialise (Serialise)
 import Control.Concurrent.STM
     ( TChan
     , atomically
@@ -31,14 +33,13 @@ import Data.Aeson
     )
 import Data.ByteString (ByteString)
 import Data.ByteString.Builder qualified as Builder
-import Data.ByteString.Lazy qualified as LBS
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Data.Text.Read qualified as TR
 import KelGroups.Bootstrap (AuthMode (..), authMode)
-import KelGroups.Event (Proposal (..))
+import KelGroups.Event (GroupEvent (..), Proposal (..))
 import KelGroups.Fold (AppFold)
 import KelGroups.Server.JSON
     ( AppendResult (..)
@@ -51,8 +52,11 @@ import KelGroups.State
     , isMember
     )
 import KelGroups.Store
-    ( KELStore
+    ( ChainTip (..)
+    , KELStore
+    , StoredEvent (..)
     , appendEvent
+    , chainTip
     , kelLength
     , readEventsFrom
     , readState
@@ -68,6 +72,16 @@ import Keri.Cesr qualified as Cesr
 import Keri.Cesr.DerivationCode (DerivationCode (..))
 import Keri.Cesr.Primitive (Primitive (..))
 import Keri.Crypto.Ed25519 qualified as Ed25519
+import Keri.Event (Event)
+import Keri.Event.Inception
+    ( InceptionConfig (..)
+    , mkInception
+    )
+import Keri.Event.Interaction
+    ( InteractionConfig (..)
+    , mkInteraction
+    )
+import Keri.Event.Serialize (serializeEvent)
 import Network.HTTP.Types
     ( HeaderName
     , Status
@@ -77,6 +91,7 @@ import Network.HTTP.Types
     , status401
     , status403
     , status404
+    , status409
     , status422
     )
 import Network.Wai
@@ -110,10 +125,10 @@ Unmatched routes are passed to the optional fallback
 application, or return 404.
 -}
 mkApp
-    :: (Serialise a, FromJSON a, ToJSON a)
+    :: (FromJSON a, ToJSON a)
     => ServerEnv a
     -> Maybe Application
-    -- ^ Optional fallback for unmatched routes (e.g. static files)
+    -- ^ Optional fallback for unmatched routes
     -> Application
 mkApp env mFallback req respond =
     case (requestMethod req, pathInfo req) of
@@ -179,8 +194,7 @@ instance (ToJSON a) => ToJSON (ConditionResponse a) where
 -- --------------------------------------------------------
 
 handleGetEvent
-    :: (Serialise a, ToJSON a)
-    => ServerEnv a
+    :: ServerEnv a
     -> Application
 handleGetEvent env req respond =
     case parseAfter req of
@@ -190,22 +204,31 @@ handleGetEvent env req respond =
                     BadRequest "missing or invalid ?after=N"
         Just after -> do
             events <-
-                readEventsFrom (envStore env) (after + 1)
+                readEventsFrom
+                    (envStore env)
+                    (after + 1)
             case events of
                 [] ->
                     respond $
                         jsonResponse status404 $
                             BadRequest
                                 "no event at position"
-                ((signer, evt) : _) ->
+                (se : _) ->
                     respond $
                         responseLBS
                             status200
                             jsonHeaders
                             ( encode $
                                 object
-                                    [ "signer" .= signer
-                                    , "event" .= evt
+                                    [ "signer"
+                                        .= seSigner se
+                                    , "event"
+                                        .= TE.decodeUtf8
+                                            ( seEventBytes
+                                                se
+                                            )
+                                    , "signature"
+                                        .= seSignature se
                                     ]
                             )
 
@@ -224,7 +247,7 @@ parseAfter req =
 -- --------------------------------------------------------
 
 handlePostEvent
-    :: (Serialise a, FromJSON a, ToJSON a)
+    :: (FromJSON a, ToJSON a)
     => ServerEnv a
     -> Application
 handlePostEvent env req respond = do
@@ -243,7 +266,7 @@ handlePostEvent env req respond = do
                     doAppend env sub respond
 
 handleBootstrapPost
-    :: (Serialise a, ToJSON a)
+    :: (ToJSON a)
     => ServerEnv a
     -> Submission a
     -> (Response -> IO b)
@@ -264,43 +287,119 @@ handleBootstrapPost env sub respond =
             | otherwise ->
                 doAppend env sub respond
 
--- | Validate and append the event.
+{- | Validate and append the event. Constructs the
+appropriate KERI event (inception or interaction),
+verifies the signature against it, and appends.
+-}
 doAppend
-    :: (Serialise a, ToJSON a)
+    :: (ToJSON a)
     => ServerEnv a
     -> Submission a
     -> (Response -> IO b)
     -> IO b
-doAppend env sub respond =
-    case verifySig (subSigner sub) (subSignature sub) (subEvent sub) of
-        Left err ->
+doAppend env sub respond = do
+    gs <- readState (envStore env)
+    -- Business-rule validation
+    case validateEvent
+        (envConfig env)
+        gs
+        (subSigner sub)
+        (subEvent sub) of
+        Left ve ->
             respond $
-                jsonResponse status401 $
-                    SignatureError err
+                jsonResponse status422 $
+                    ValidationErr ve
         Right () -> do
-            gs <- readState (envStore env)
-            case validateEvent
-                (envConfig env)
-                gs
-                (subSigner sub)
-                (subEvent sub) of
-                Left ve ->
-                    respond $
-                        jsonResponse status422 $
-                            ValidationErr ve
+            tip <- chainTip (envStore env)
+            -- Stale-tip check
+            case checkStaleTip tip (subPriorDigest sub) of
+                Left err ->
+                    respond $ jsonResponse status409 err
                 Right () -> do
-                    appendEvent
-                        (envStore env)
-                        (envAppFold env)
-                        (subSigner sub, subEvent sub)
-                    sn <- kelLength (envStore env)
-                    atomically $
-                        writeTChan (envBroadcast env) sn
-                    respond $
-                        responseLBS
-                            status200
-                            jsonHeaders
-                            (encode $ AppendResult sn)
+                    -- Construct KERI event
+                    let keriEvt =
+                            mkKeriEvent
+                                tip
+                                (subSigner sub)
+                                (subEvent sub)
+                    -- Verify signature against KERI event
+                    case verifySig
+                        (subSigner sub)
+                        (subSignature sub)
+                        keriEvt of
+                        Left err ->
+                            respond
+                                $ jsonResponse
+                                    status401
+                                $ SignatureError err
+                        Right () -> do
+                            appendEvent
+                                (envStore env)
+                                (envAppFold env)
+                                (subSigner sub)
+                                keriEvt
+                                (subSignature sub)
+                                (subEvent sub)
+                            sn <-
+                                kelLength (envStore env)
+                            atomically $
+                                writeTChan
+                                    (envBroadcast env)
+                                    sn
+                            respond $
+                                responseLBS
+                                    status200
+                                    jsonHeaders
+                                    ( encode $
+                                        AppendResult sn
+                                    )
+
+{- | Construct the KERI event for a submission.
+First event (no tip) becomes an inception event;
+subsequent events become interaction events with
+the group event as anchor.
+-}
+mkKeriEvent
+    :: (ToJSON a)
+    => Maybe ChainTip
+    -> Text
+    -> GroupEvent a
+    -> Event
+mkKeriEvent Nothing signerKey groupEvt =
+    mkInception
+        InceptionConfig
+            { icKeys = [signerKey]
+            , icSigningThreshold = 1
+            , icNextKeys = []
+            , icNextThreshold = 0
+            , icConfig = []
+            , icAnchors = [toJSON groupEvt]
+            }
+mkKeriEvent (Just tip) _signer groupEvt =
+    mkInteraction
+        InteractionConfig
+            { ixPrefix = tipPrefix tip
+            , ixSequenceNumber = tipSeqNo tip + 1
+            , ixPriorDigest = tipDigest tip
+            , ixAnchors = [toJSON groupEvt]
+            }
+
+{- | Check stale-tip: if the client provides a
+priorDigest, it must match the current tip's digest.
+For the first event (no tip), priorDigest should be
+absent.
+-}
+checkStaleTip
+    :: Maybe ChainTip
+    -> Maybe Text
+    -> Either ServerError ()
+checkStaleTip Nothing Nothing = Right ()
+checkStaleTip Nothing (Just _) = Right ()
+checkStaleTip (Just _) Nothing = Right ()
+checkStaleTip (Just tip) (Just pd)
+    | pd == tipDigest tip = Right ()
+    | otherwise =
+        Left $ StaleTip (tipDigest tip) pd
 
 -- --------------------------------------------------------
 -- GET /stream (SSE)
@@ -388,9 +487,9 @@ hasPendingIntro key gs =
 -- Membership guard
 -- --------------------------------------------------------
 
-{- | Check that the request includes a valid member key.
-In bootstrap mode, all guarded endpoints are blocked
-(non-members should use /info instead).
+{- | Check that the request includes a valid member
+key. In bootstrap mode, all guarded endpoints are
+blocked (non-members should use /info instead).
 -}
 requireMemberGuard
     :: ServerEnv a
@@ -441,23 +540,22 @@ jsonResponse
 jsonResponse status body =
     responseLBS status jsonHeaders (encode body)
 
-{- | Verify the Ed25519 signature on a submission.
-The signed message is the JSON encoding of the event.
+{- | Verify the Ed25519 signature on a KERI event.
+The signed message is the canonical serialization of
+the KERI event (not the group event).
 -}
 verifySig
-    :: (ToJSON a)
-    => Text
+    :: Text
     -- ^ CESR-encoded signer public key
     -> Text
     -- ^ CESR-encoded Ed25519 signature
-    -> a
-    -- ^ The event (serialized as JSON for signing)
+    -> Event
+    -- ^ The KERI event
     -> Either Text ()
-verifySig signerCesr sigCesr evt = do
+verifySig signerCesr sigCesr keriEvt = do
     pk <- decodePubKey signerCesr
     sig <- decodeSig sigCesr
-    let msg =
-            LBS.toStrict $ encode evt
+    let msg = serializeEvent keriEvt
     if Ed25519.verify pk msg sig
         then Right ()
         else Left "signature verification failed"

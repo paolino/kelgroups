@@ -5,11 +5,13 @@ Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 Each property mirrors a Lean theorem, verifying that the
-invariant holds after CBOR encode → SQLite write → read
-→ decode → fold. Property names match Lean theorem names.
+invariant holds after KERI event construction → SQLite
+write → read → fold. Property names match Lean theorem
+names.
 -}
 module StoreInvariantsSpec (spec) where
 
+import Data.IORef (newIORef)
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Generators
@@ -29,12 +31,11 @@ import KelGroups.State
     , adminCount
     , majority
     )
-import KelGroups.Store (appendEvent, readState)
-import KelGroups.Store.Serialise ()
-import KelGroups.Trivial (trivialFold)
+import KelGroups.Store (readState)
 import KelGroups.Types (Admin (..), Role (..))
 import StoreTestDSL
-    ( arbitraryHistory
+    ( appendTestEvent
+    , arbitraryHistory
     , onReachable
     , onReachableWhere
     , onReachableWith
@@ -154,7 +155,10 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
             roles <- pick arbitraryAdminRoles
             let email = key <> "@test.example"
             gs <- run $ withStore $ \store -> do
-                appendEvent store trivialFold $
+                tipRef <- newIORef Nothing
+                StoreTestDSL.appendTestEvent
+                    store
+                    tipRef
                     ( "bootstrap"
                     , Base $
                         Propose $
@@ -170,7 +174,10 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
             roles <- pick arbitraryAdminRoles
             let email = key <> "@test.example"
             gs <- run $ withStore $ \store -> do
-                appendEvent store trivialFold $
+                tipRef <- newIORef Nothing
+                StoreTestDSL.appendTestEvent
+                    store
+                    tipRef
                     ( "bootstrap"
                     , Base $
                         Propose $
@@ -181,7 +188,9 @@ spec = describe "Store-through invariants (Lean mirrors)" $ do
                                     (AdminRole PublicAdmin)
                                 )
                     )
-                appendEvent store trivialFold $
+                StoreTestDSL.appendTestEvent
+                    store
+                    tipRef
                     ( "founder"
                     , Base $
                         Propose $

@@ -8,7 +8,7 @@ License     : Apache-2.0
 
 Reusable test environment, HTTP helpers, submission builders,
 and response decoders for integration tests. All submissions
-carry real Ed25519 signatures verified by the server.
+carry real Ed25519 signatures over serialized KERI events.
 -}
 module TestHelpers
     ( -- * Test environment
@@ -27,7 +27,8 @@ module TestHelpers
     , TestId (..)
     , newTestId
 
-      -- * Submission builders
+      -- * Submission builders (unsigned)
+    , TestSub (..)
     , testPass
     , bootstrap
     , proposeAdmin
@@ -35,6 +36,9 @@ module TestHelpers
     , proposeRemove
     , proposeChangeRoles
     , approve
+
+      -- * Signing helpers
+    , signSubmission
 
       -- * Response decoders
     , ConditionResp (..)
@@ -46,7 +50,6 @@ module TestHelpers
 import Control.Concurrent.STM (newBroadcastTChanIO)
 import Data.Aeson
     ( FromJSON (..)
-    , ToJSON (..)
     , Value (..)
     , decode
     , encode
@@ -54,6 +57,12 @@ import Data.Aeson
     , (.:)
     )
 import Data.ByteString.Lazy qualified as LBS
+import Data.IORef
+    ( IORef
+    , newIORef
+    , readIORef
+    , writeIORef
+    )
 import Data.Set qualified as Set
 import Data.Text (Text)
 import KelGroups.Event
@@ -61,13 +70,16 @@ import KelGroups.Event
     , GroupEvent (..)
     , Proposal (..)
     )
-import KelGroups.Server (ServerEnv (..), mkApp)
+import KelGroups.Server (ServerEnv (..), mkApp, mkKeriEvent)
 import KelGroups.Server.JSON
     ( AppendResult (..)
     , Submission (..)
     )
-import KelGroups.Store (closeKEL, openKEL)
-import KelGroups.Store.Serialise ()
+import KelGroups.Store
+    ( ChainTip (..)
+    , closeKEL
+    , openKEL
+    )
 import KelGroups.Trivial
     ( trivialConfig
     , trivialFold
@@ -78,6 +90,13 @@ import Keri.Cesr.DerivationCode (DerivationCode (..))
 import Keri.Cesr.Encode qualified as Cesr
 import Keri.Cesr.Primitive (Primitive (..))
 import Keri.Crypto.Ed25519 qualified as Ed25519
+import Keri.Event
+    ( Event
+    , eventDigest
+    , eventPrefix
+    , eventSequenceNumber
+    )
+import Keri.Event.Serialize (serializeEvent)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types (status200)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -110,14 +129,13 @@ newTestId = do
                     }
     pure TestId{tidKeyPair = kp, tidKey = cesrKey}
 
-{- | Sign a JSON-serializable event with a test
-identity. Returns the CESR-encoded Ed25519 signature.
+{- | Sign the canonical serialization of a KERI event.
+Returns the CESR-encoded Ed25519 signature.
 -}
-signEvent :: (ToJSON a) => TestId -> a -> Text
-signEvent tid evt =
-    let msg = LBS.toStrict (encode evt)
-        sigBytes =
-            Ed25519.sign (tidKeyPair tid) msg
+signKeriBytes :: TestId -> Event -> Text
+signKeriBytes tid keriEvt =
+    let msg = serializeEvent keriEvt
+        sigBytes = Ed25519.sign (tidKeyPair tid) msg
     in  Cesr.encode
             Primitive
                 { code = Ed25519Sig
@@ -136,6 +154,8 @@ testPass = "e2e-bootstrap-pass"
 data TestEnv = TestEnv
     { tePort :: Warp.Port
     , teMgr :: HC.Manager
+    , teTip :: IORef (Maybe ChainTip)
+    -- ^ Client-side chain tip for KERI event construction
     }
 
 -- | Spin up a fresh server on a random port for one test.
@@ -153,10 +173,18 @@ withTestEnv action = do
                 , envBroadcast = ch
                 }
     mgr <- HC.newManager HC.defaultManagerSettings
+    tipRef <- newIORef Nothing
     result <-
         Warp.testWithApplication
             (pure $ mkApp env Nothing)
-            (\port -> action TestEnv{tePort = port, teMgr = mgr})
+            ( \port ->
+                action
+                    TestEnv
+                        { tePort = port
+                        , teMgr = mgr
+                        , teTip = tipRef
+                        }
+            )
     closeKEL store
     removeFile dbPath
     pure result
@@ -166,7 +194,8 @@ withTestEnv action = do
 -- --------------------------------------------------------
 
 -- | GET request to the test server.
-httpGet :: TestEnv -> String -> IO (HC.Response LBS.ByteString)
+httpGet
+    :: TestEnv -> String -> IO (HC.Response LBS.ByteString)
 httpGet te path = do
     req <-
         HC.parseRequest $
@@ -192,12 +221,31 @@ httpPost te path body = do
                 }
     HC.httpLbs req (teMgr te)
 
--- | POST a submission and expect 200, return sequence number.
-postEvent :: TestEnv -> Submission () -> IO Int
-postEvent te sub = do
+{- | POST a test submission and expect 200. Constructs
+the KERI event, signs it, sends, and updates the
+client-side chain tip.
+-}
+postEvent :: TestEnv -> TestSub -> IO Int
+postEvent te ts = do
+    sub <- signSubmission te ts
     resp <- httpPost te "/events" (encode sub)
     HC.responseStatus resp `shouldBe` status200
     ar <- decodeOrFail (HC.responseBody resp)
+    -- Update client-side chain tip
+    tip <- readIORef (teTip te)
+    let keriEvt =
+            mkKeriEvent
+                tip
+                (tidKey $ tsSigner ts)
+                (tsEvent ts)
+        newTip =
+            ChainTip
+                { tipPrefix = eventPrefix keriEvt
+                , tipSeqNo =
+                    eventSequenceNumber keriEvt
+                , tipDigest = eventDigest keriEvt
+                }
+    writeIORef (teTip te) (Just newTip)
     pure (sequenceNumber ar)
 
 -- | GET /condition?key=K and decode.
@@ -225,27 +273,45 @@ decodeOrFail bs = case decode bs of
                 <> show (LBS.take 200 bs)
 
 -- --------------------------------------------------------
+-- Unsigned test submissions
+-- --------------------------------------------------------
+
+{- | An unsigned test submission. Signed by 'postEvent'
+or 'signSubmission' using the current chain tip.
+-}
+data TestSub = TestSub
+    { tsSigner :: TestId
+    , tsPassphrase :: Maybe Text
+    , tsEvent :: GroupEvent ()
+    }
+
+{- | Sign a test submission using the current chain tip.
+Constructs the KERI event and signs it.
+-}
+signSubmission :: TestEnv -> TestSub -> IO (Submission ())
+signSubmission te ts = do
+    tip <- readIORef (teTip te)
+    let keriEvt =
+            mkKeriEvent
+                tip
+                (tidKey $ tsSigner ts)
+                (tsEvent ts)
+        sig = signKeriBytes (tsSigner ts) keriEvt
+    pure
+        Submission
+            { subPassphrase = tsPassphrase ts
+            , subSigner = tidKey (tsSigner ts)
+            , subSignature = sig
+            , subPriorDigest = fmap tipDigest tip
+            , subEvent = tsEvent ts
+            }
+
+-- --------------------------------------------------------
 -- Submission builders
 -- --------------------------------------------------------
 
-{- | Build a signed submission from a test identity
-and an event.
--}
-mkSubmission
-    :: TestId
-    -> Maybe Text
-    -> GroupEvent ()
-    -> Submission ()
-mkSubmission tid mPass evt =
-    Submission
-        { subPassphrase = mPass
-        , subSigner = tidKey tid
-        , subSignature = signEvent tid evt
-        , subEvent = evt
-        }
-
 -- | Bootstrap the first admin.
-bootstrap :: TestId -> Submission ()
+bootstrap :: TestId -> TestSub
 bootstrap tid =
     let evt =
             Base $
@@ -256,10 +322,10 @@ bootstrap tid =
                         ( Set.singleton
                             (AdminRole PublicAdmin)
                         )
-    in  mkSubmission tid (Just testPass) evt
+    in  TestSub tid (Just testPass) evt
 
 -- | Propose a new member with PublicAdmin role.
-proposeAdmin :: TestId -> TestId -> Submission ()
+proposeAdmin :: TestId -> TestId -> TestSub
 proposeAdmin signer newMember =
     let evt =
             Base $
@@ -270,10 +336,10 @@ proposeAdmin signer newMember =
                         ( Set.singleton
                             (AdminRole PublicAdmin)
                         )
-    in  mkSubmission signer Nothing evt
+    in  TestSub signer Nothing evt
 
 -- | Propose a new member with no roles.
-proposeMember :: TestId -> TestId -> Submission ()
+proposeMember :: TestId -> TestId -> TestSub
 proposeMember signer newMember =
     let evt =
             Base $
@@ -282,32 +348,32 @@ proposeMember signer newMember =
                         (tidKey newMember)
                         (tidKey newMember <> "@test.example")
                         Set.empty
-    in  mkSubmission signer Nothing evt
+    in  TestSub signer Nothing evt
 
 -- | Propose removing a member.
-proposeRemove :: TestId -> TestId -> Submission ()
+proposeRemove :: TestId -> TestId -> TestSub
 proposeRemove signer target =
     let evt =
             Base $
                 Propose $
                     RemoveMember (tidKey target)
-    in  mkSubmission signer Nothing evt
+    in  TestSub signer Nothing evt
 
 -- | Propose changing a member's roles.
 proposeChangeRoles
-    :: TestId -> TestId -> Set.Set Role -> Submission ()
+    :: TestId -> TestId -> Set.Set Role -> TestSub
 proposeChangeRoles signer target roles =
     let evt =
             Base $
                 Propose $
                     ChangeRoles (tidKey target) roles
-    in  mkSubmission signer Nothing evt
+    in  TestSub signer Nothing evt
 
 -- | Approve a pending proposal.
-approve :: TestId -> Text -> Submission ()
+approve :: TestId -> Text -> TestSub
 approve signer proposalId =
     let evt = Base $ Approve proposalId
-    in  mkSubmission signer Nothing evt
+    in  TestSub signer Nothing evt
 
 -- --------------------------------------------------------
 -- Response decoders

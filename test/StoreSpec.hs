@@ -11,6 +11,7 @@ consistency, readEventsFrom, and kelLength.
 module StoreSpec (spec) where
 
 import Control.Monad (forM_)
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import KelGroups.Event
@@ -18,21 +19,28 @@ import KelGroups.Event
     , GroupEvent (..)
     , Proposal (..)
     )
+import KelGroups.Server (mkKeriEvent)
 import KelGroups.State (emptyState)
 import KelGroups.Store
-    ( appendEvent
+    ( ChainTip (..)
+    , StoredEvent (..)
+    , appendEvent
     , closeKEL
     , kelLength
     , openKEL
     , readEventsFrom
     , readState
     )
-import KelGroups.Store.Serialise ()
 import KelGroups.Trivial
     ( trivialFold
     , trivialInitial
     )
 import KelGroups.Types (Admin (..), Role (..))
+import Keri.Event
+    ( eventDigest
+    , eventPrefix
+    , eventSequenceNumber
+    )
 import System.Directory (removeFile)
 import System.IO.Temp (emptySystemTempFile)
 import Test.Hspec (Spec, around, describe, it, shouldBe)
@@ -122,24 +130,55 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                 len `shouldBe` 0
 
     describe "roundtrip" $ do
-        prop "append then readEventsFrom 1 matches" $
+        prop "signers match after append+read" $
             monadicIO $ do
                 events <- pick arbitraryBaseEvents
-                (original, replayed) <- run $
+                signers <- run $
                     withTempKEL $ \path -> do
                         store <-
                             openKEL
                                 trivialFold
                                 trivialInitial
                                 path
+                        tipRef <- newIORef Nothing
                         forM_ events $
-                            appendEvent
-                                store
-                                trivialFold
-                        replayed <- readEventsFrom store 1
+                            \(signer, groupEvt) -> do
+                                tip <-
+                                    readIORef tipRef
+                                let keriEvt =
+                                        mkKeriEvent
+                                            tip
+                                            signer
+                                            groupEvt
+                                appendEvent
+                                    store
+                                    trivialFold
+                                    signer
+                                    keriEvt
+                                    "test-sig"
+                                    groupEvt
+                                writeIORef tipRef $
+                                    Just
+                                        ChainTip
+                                            { tipPrefix =
+                                                eventPrefix
+                                                    keriEvt
+                                            , tipSeqNo =
+                                                eventSequenceNumber
+                                                    keriEvt
+                                            , tipDigest =
+                                                eventDigest
+                                                    keriEvt
+                                            }
+                        replayed <-
+                            readEventsFrom store 1
                         closeKEL store
-                        pure (events, replayed)
-                assert $ original == replayed
+                        pure
+                            ( map fst events
+                            , map seSigner replayed
+                            )
+                assert $
+                    fst signers == snd signers
 
     describe "fold consistency" $ do
         prop
@@ -154,10 +193,36 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 trivialFold
                                 trivialInitial
                                 path
+                        tipRef <- newIORef Nothing
                         forM_ events $
-                            appendEvent
-                                store
-                                trivialFold
+                            \(signer, groupEvt) -> do
+                                tip <-
+                                    readIORef tipRef
+                                let keriEvt =
+                                        mkKeriEvent
+                                            tip
+                                            signer
+                                            groupEvt
+                                appendEvent
+                                    store
+                                    trivialFold
+                                    signer
+                                    keriEvt
+                                    "test-sig"
+                                    groupEvt
+                                writeIORef tipRef $
+                                    Just
+                                        ChainTip
+                                            { tipPrefix =
+                                                eventPrefix
+                                                    keriEvt
+                                            , tipSeqNo =
+                                                eventSequenceNumber
+                                                    keriEvt
+                                            , tipDigest =
+                                                eventDigest
+                                                    keriEvt
+                                            }
                         gs1 <- readState store
                         closeKEL store
                         store2 <-
@@ -205,11 +270,33 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 RemoveMember "k2"
                         )
                     ]
-            forM_ events $
-                appendEvent store trivialFold
+            tipRef <- newIORef Nothing
+            forM_ events $ \(signer, groupEvt) -> do
+                tip <- readIORef tipRef
+                let keriEvt =
+                        mkKeriEvent tip signer groupEvt
+                appendEvent
+                    store
+                    trivialFold
+                    signer
+                    keriEvt
+                    "test-sig"
+                    groupEvt
+                writeIORef tipRef $
+                    Just
+                        ChainTip
+                            { tipPrefix =
+                                eventPrefix keriEvt
+                            , tipSeqNo =
+                                eventSequenceNumber
+                                    keriEvt
+                            , tipDigest =
+                                eventDigest keriEvt
+                            }
             tail' <- readEventsFrom store 2
             closeKEL store
-            tail' `shouldBe` drop 1 events
+            map seSigner tail'
+                `shouldBe` map fst (drop 1 events)
 
         it "returns empty for index beyond length" $
             \path -> do
@@ -218,17 +305,26 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                         trivialFold
                         trivialInitial
                         path
-                appendEvent store trivialFold $
-                    ( "s"
-                    , Base $
-                        Propose $
-                            IntroduceMember
-                                "k"
-                                "k@test.example"
-                                ( Set.singleton
-                                    (AdminRole PublicAdmin)
-                                )
-                    )
+                let signer = "s"
+                    groupEvt :: GroupEvent ()
+                    groupEvt =
+                        Base $
+                            Propose $
+                                IntroduceMember
+                                    "k"
+                                    "k@test.example"
+                                    ( Set.singleton
+                                        (AdminRole PublicAdmin)
+                                    )
+                    keriEvt =
+                        mkKeriEvent Nothing signer groupEvt
+                appendEvent
+                    store
+                    trivialFold
+                    signer
+                    keriEvt
+                    "test-sig"
+                    groupEvt
                 tail' <- readEventsFrom store 99
                 closeKEL store
                 tail' `shouldBe` []
@@ -244,10 +340,36 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                 trivialFold
                                 trivialInitial
                                 path
+                        tipRef <- newIORef Nothing
                         forM_ events $
-                            appendEvent
-                                store
-                                trivialFold
+                            \(signer, groupEvt) -> do
+                                tip <-
+                                    readIORef tipRef
+                                let keriEvt =
+                                        mkKeriEvent
+                                            tip
+                                            signer
+                                            groupEvt
+                                appendEvent
+                                    store
+                                    trivialFold
+                                    signer
+                                    keriEvt
+                                    "test-sig"
+                                    groupEvt
+                                writeIORef tipRef $
+                                    Just
+                                        ChainTip
+                                            { tipPrefix =
+                                                eventPrefix
+                                                    keriEvt
+                                            , tipSeqNo =
+                                                eventSequenceNumber
+                                                    keriEvt
+                                            , tipDigest =
+                                                eventDigest
+                                                    keriEvt
+                                            }
                         l <- kelLength store
                         closeKEL store
                         pure l

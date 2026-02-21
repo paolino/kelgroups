@@ -148,11 +148,12 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
             let pid = fst (head $ crPending c)
 
             -- a1 tries to approve own proposal
+            sub <- signSubmission te (approve a1 pid)
             resp <-
                 httpPost
                     te
                     "/events"
-                    (encode $ approve a1 pid)
+                    (encode sub)
             HC.responseStatus resp `shouldBe` status422
 
     describe "Member removal" $ do
@@ -300,11 +301,15 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
 
             _ <- postEvent te (bootstrap a1)
 
+            sub <-
+                signSubmission
+                    te
+                    (proposeMember nobody u1)
             resp <-
                 httpPost
                     te
                     "/events"
-                    (encode $ proposeMember nobody u1)
+                    (encode sub)
             HC.responseStatus resp `shouldBe` status422
 
         it "non-admin member cannot propose" $ \te -> do
@@ -318,24 +323,24 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                     te
                     (proposeMember a1 user1)
 
+            sub <-
+                signSubmission
+                    te
+                    (proposeMember user1 user2)
             resp <-
                 httpPost
                     te
                     "/events"
-                    ( encode $
-                        proposeMember user1 user2
-                    )
+                    (encode sub)
             HC.responseStatus resp `shouldBe` status422
 
         it "bootstrap rejects missing passphrase" $
             \te -> do
                 a1 <- newTestId
-                let sub =
-                        (bootstrap a1)
-                            { subPassphrase = Nothing
-                            }
+                sub <- signSubmission te (bootstrap a1)
+                let sub' = sub{subPassphrase = Nothing}
                 resp <-
-                    httpPost te "/events" (encode sub)
+                    httpPost te "/events" (encode sub')
                 HC.responseStatus resp
                     `shouldBe` status401
 
@@ -343,11 +348,15 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
             \te -> do
                 a1 <- newTestId
                 _ <- postEvent te (bootstrap a1)
+                sub <-
+                    signSubmission
+                        te
+                        (proposeAdmin a1 a1)
                 resp <-
                     httpPost
                         te
                         "/events"
-                        (encode $ proposeAdmin a1 a1)
+                        (encode sub)
                 HC.responseStatus resp
                     `shouldBe` status422
 

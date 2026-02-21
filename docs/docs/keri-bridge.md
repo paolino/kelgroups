@@ -47,9 +47,9 @@ Side-by-side mapping from kelgroups to KERI.
 | **Event signer** | `subSigner :: Text` field in `Server/JSON.hs:55-63` — passed through unchecked | **Indexed signature** verified against key state | `verifySignatures keys threshold msg sigs` |
 | **Proposal** | `Base (Propose proposal)` in `Event.hs:37-42` | **Interaction anchor** carrying proposal JSON | `InteractionConfig { ixAnchors = [proposalJson] }` |
 | **Approval** | `Base (Approve pid)` in `Event.hs:37-42` | **Interaction anchor** carrying approval reference | same, with anchor referencing proposal SAID |
-| **Proposal digest** | `proposalDigest p = "proposal:" <> pack (show p)` in `Fold.hs:184-187` — placeholder | **SAID** of the proposal interaction event | `computeSaid` over `serializeEvent` bytes |
-| **Event storage** | SQLite `events (id INTEGER PRIMARY KEY AUTOINCREMENT, signer TEXT, event BLOB)` in `Store.hs:72-76` | **KEL** with digest chain | `Kel.append :: Kel -> SignedEvent -> Either String Kel` |
-| **Event serialization** | CBOR via `Codec.Serialise` in `Store/Serialise.hs` | **Canonical JSON** with deterministic field order | `serializeEvent :: Event -> ByteString` |
+| **Proposal digest** | `computeSaid` over canonical JSON of proposal content | **SAID** of the proposal interaction event | `computeSaid` over `serializeEvent` bytes |
+| **Event storage** | SQLite with KERI canonical JSON (`serializeEvent`) + denormalized chain metadata (prefix, seq_no, digest) | **KEL** with digest chain | `mkInception`, `mkInteraction`, `serializeEvent` |
+| **Event serialization** | Canonical JSON via keri-hs `serializeEvent` | **Canonical JSON** with deterministic field order | `serializeEvent :: Event -> ByteString` |
 | **Admin majority** | `majority gs = (adminCount gs + 1) \`div\` 2` in `State.hs:66-73` | **Signing threshold** (`kt` field in events) | `stateSigningThreshold` in `KeyState` |
 | **Key state** | Not tracked — members map is flat | `KeyState` with current keys, next commitments, sequence number | `applyEvent :: KeyState -> Event -> Either String KeyState` |
 
@@ -79,64 +79,32 @@ inception event). That requires Gap 6 (group inception).
 
 ---
 
-### Gap 3: No SAID (HIGH)
+### Gap 3: ~~No SAID~~ — CLOSED
 
-**Design doc claims:** proposals have cryptographic digests.
-
-**Code does:** `proposalDigest p = "proposal:" <> pack (show p)` in
-`Fold.hs:184-187`. This is a human-readable string, not a cryptographic
-hash. The code has a `TODO: use proper SAID/hash via keri-hs` comment.
-
-**KERI requires:** event identifiers are computed via SAID — hash over
-the serialized event with a placeholder in the digest field.
-
-**keri-hs:** `computeSaid` in `Keri.Crypto.Digest`.
+Proposal digests now use `computeSaid` over canonical JSON serialization
+of the proposal content via keri-hs. `ProposalId` = SAID of the
+proposal. Implemented on `feat/keri-bridge`.
 
 ---
 
-### Gap 4: No digest chain (HIGH) — tracked in [#13](https://github.com/paolino/kelgroups/issues/13)
+### Gap 4: ~~No digest chain~~ — CLOSED
 
-**Design doc claims:** events form a Key Event Log.
+Events are stored as KERI events (inception + interactions) with
+hash-chaining via `priorDigest`. Each interaction event references the
+digest of its predecessor. Clients sign over the serialized KERI event
+(which includes `priorDigest`), committing to the entire history.
+Stale-tip detection rejects submissions referencing an outdated chain
+tip. Implemented on `feat/keri-bridge`.
 
-**Code does:** events are stored with SQLite autoincrement IDs
-(`Store.hs:72-76`). There is no hash linking between events. An event
-can be silently deleted or reordered without detection.
-
-**KERI requires:** every event (except inception) includes `priorDigest` —
-the hash of its predecessor. Tampering breaks the chain.
-
-**keri-hs:** `priorDigest` field on `InteractionData` and `RotationData`.
-
-**Core invariant:** When a user signs an event, they sign "I append X to
-a KEL whose tip has digest D." The signature commits to the entire
-history up to that point. Without this, signatures prove authorship but
-not ordering — the server can present different histories to different
-clients undetected.
-
-**Conflict handling:** When a submission references a stale tip (another
-client appended in between), the server rejects it. The client must
-fetch the new events, show the user the updated state, and let them
-re-submit, edit, or discard their draft. No automatic retry — the user
-must acknowledge the new state.
-
-See [#13](https://github.com/paolino/kelgroups/issues/13) for full
-specification.
+See [#13](https://github.com/paolino/kelgroups/issues/13).
 
 ---
 
-### Gap 5: No canonical serialization (MEDIUM)
+### Gap 5: ~~No canonical serialization~~ — CLOSED
 
-**Design doc claims:** events are serialized for storage.
-
-**Code does:** CBOR via `Codec.Serialise` in `Store/Serialise.hs:41-181`.
-CBOR is a compact binary format but is not the KERI wire format and
-is not deterministic without extra care.
-
-**KERI requires:** canonical JSON with protocol-defined field ordering
-(`v`, `t`, `d`, `i`, `s`, `p`, `kt`, `k`, ...). This determinism is
-essential — `computeSaid` and signature verification depend on it.
-
-**keri-hs:** `serializeEvent` in `Keri.Event.Serialize`.
+Events are serialized via keri-hs `serializeEvent` (canonical JSON with
+protocol-defined field ordering). CBOR serialization (`Store/Serialise.hs`)
+has been removed. Implemented on `feat/keri-bridge`.
 
 ---
 
@@ -438,41 +406,29 @@ Closes **Gap 2** (no self-certifying identifiers).
 - **Tests:** invalid CESR keys are rejected, valid ones accepted
 - **Files:** `Validate.hs`, test helpers
 
-### Step 3: SAID for proposals
+### Step 3: SAID for proposals — DONE
 
-Closes **Gap 3** (no SAID).
+Closes **Gap 3** (no SAID). Implemented on `feat/keri-bridge`.
 
-- Replace `proposalDigest` placeholder with `computeSaid` over
-  canonical JSON serialization of the proposal
+- `proposalDigest` uses `computeSaid` over canonical JSON of proposal
 - `ProposalId` = SAID of the proposal
-- **Tests:** same proposal always produces same SAID, different
-  proposals produce different SAIDs
-- **Files:** `Fold.hs`, `Event.hs`
 
-### Step 4: Digest chain
+### Step 4: Digest chain — DONE
 
-Closes **Gap 4** (no digest chain).
+Closes **Gap 4** (no digest chain). Implemented on `feat/keri-bridge`.
 
-- Each stored event includes `priorDigest` (hash of previous event's
-  serialized bytes)
-- First event's `priorDigest` = inception event's digest (or a
-  well-known genesis value)
-- Verify chain integrity on replay
-- **Tests:** tampered events break the chain, clean replay succeeds
-- **Files:** `Store.hs`, `Event.hs`
+- Group events are anchored in KERI interaction events with `priorDigest`
+- First event is a KERI inception event (`mkInception`)
+- Stale-tip detection rejects submissions with outdated `priorDigest`
+- Clients sign over serialized KERI events, committing to the full chain
 
-### Step 5: Canonical JSON
+### Step 5: Canonical JSON — DONE
 
-Closes **Gap 5** (no canonical serialization).
+Closes **Gap 5** (no canonical serialization). Implemented on `feat/keri-bridge`.
 
-- Replace CBOR serialization with deterministic JSON matching keri-hs
-  field ordering conventions
-- Use `serializeEvent` pattern: explicit field ordering via aeson
-  `Encoding` builder
-- **Migration:** one-time re-encoding of existing SQLite data, or
-  version flag in the schema
-- **Files:** `Store.hs`, `Store/Serialise.hs` (rename to
-  `Store/Serialize.hs`)
+- CBOR (`Store/Serialise.hs`) deleted entirely
+- Events stored as KERI canonical JSON via `serializeEvent` from keri-hs
+- SQLite schema stores both KERI event bytes and group event JSON anchor
 
 ### Step 6: Group inception + server identifier
 
