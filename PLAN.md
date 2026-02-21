@@ -64,9 +64,10 @@ and approvals on the main chain:
 
 ### Invariants
 
-Formalized in Lean 4 (`lean/KelGroups/KEL.lean` predicates,
-`lean/KelGroups/KELInvariants.lean` proofs). Lean predicate names in
-parentheses.
+Formalized in Lean 4
+([`KEL.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KEL.lean) predicates,
+[`KELInvariants.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KELInvariants.lean) proofs).
+Lean predicate names in parentheses.
 
 1. **L1 is append-only and hash-chained** (`hashChainValid`).
    Non-inception events: `priorDigest.isSome`, sequence = predecessor + 1.
@@ -101,8 +102,9 @@ parentheses.
 
 ### State machine transitions
 
-Formalized in `lean/KelGroups/KEL.lean` (definitions) and
-`lean/KelGroups/KELInvariants.lean` (preservation proofs).
+Formalized in
+[`KEL.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KEL.lean) (definitions) and
+[`KELInvariants.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KELInvariants.lean) (preservation proofs).
 
 **L2 lifecycle:**
 

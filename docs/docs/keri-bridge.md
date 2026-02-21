@@ -259,7 +259,9 @@ instead, any client with the L2 data can prove the server lied.
 ### Invariants
 
 Formalized in Lean 4: predicate definitions in
-`lean/KelGroups/KEL.lean`, proofs in `lean/KelGroups/KELInvariants.lean`.
+[`lean/KelGroups/KEL.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KEL.lean),
+proofs in
+[`lean/KelGroups/KELInvariants.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KELInvariants.lean).
 
 1. **L1 is append-only and hash-chained** (`hashChainValid`). Every
    non-inception event has `priorDigest.isSome` and its sequence
@@ -333,8 +335,10 @@ Formalized in Lean 4: predicate definitions in
 
 The invariants above are static predicates. To prove the system
 *maintains* them, each operation is modeled as a transition function
-with preservation theorems. Definitions in `lean/KelGroups/KEL.lean`,
-proofs in `lean/KelGroups/KELInvariants.lean`.
+with preservation theorems. Definitions in
+[`lean/KelGroups/KEL.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KEL.lean),
+proofs in
+[`lean/KelGroups/KELInvariants.lean`](https://github.com/paolino/kelgroups/blob/main/lean/KelGroups/KELInvariants.lean).
 
 **L2 transitions (per-proposal voting chain):**
 
