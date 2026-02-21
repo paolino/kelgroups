@@ -329,6 +329,58 @@ Formalized in Lean 4: predicate definitions in
     can be garbage collected — the L1 event is the self-contained
     permanent record.
 
+### State machine transitions
+
+The invariants above are static predicates. To prove the system
+*maintains* them, each operation is modeled as a transition function
+with preservation theorems. Definitions in `lean/KelGroups/KEL.lean`,
+proofs in `lean/KelGroups/KELInvariants.lean`.
+
+**L2 transitions (per-proposal voting chain):**
+
+- **`mkL2`** — creates an L2 with a single inception event. The
+  proposing admin signs. Proved to satisfy: `hashChainValid`,
+  `l2NoDuplicateApprovals`, `l2OnlyApprovals`, `l2HasTimeout`
+  (given `timeout > 0`), `l2InceptionByAdmin` (given admin ∉ server,
+  admin ∈ admins), `l2ApprovalsMatchSAID` (vacuously — no approvals
+  yet).
+
+- **`appendApproval`** — appends an approval event referencing the
+  proposal SAID. The approving admin signs. Proved:
+  `appendApproval_preserves_approvals_match` (if the existing L2
+  matches the SAID, the extended L2 still does),
+  `appendApproval_fresh_preserves_no_duplicates` (if the signer is
+  fresh, no-duplicate-approvals is preserved).
+
+**L1 transitions (main outcome chain):**
+
+- **`mkL1`** — creates an L1 with the server inception event. The
+  server signs with its own key. Proved to satisfy: `hashChainValid`,
+  `l1StartsWithInception`, `l1ServerOnly`, and all events are
+  `l1EnactedSelfContained`.
+
+- **`appendEnacted`** — appends an enacted event carrying the proposal
+  SAID and collected approval proofs. Proved:
+  `appendEnacted_preserves_self_contained` (given `proposalSAID ≠ 0`
+  and `proofs.length > 0`, self-containment holds for all events
+  including the new one).
+
+- **`appendExpired`** — appends an expired event carrying the proposal
+  SAID. Proved: `appendExpired_preserves_self_contained` (expired
+  events satisfy self-containment trivially).
+
+**Combined validity structures:**
+
+- `L1Valid` bundles invariants 1–4: hash chain, inception, server-only,
+  self-contained.
+- `L2Valid` bundles invariants 5, 7–9, 11: approvals match SAID,
+  inception by admin, only approvals, no duplicates, has timeout.
+
+Each transition preserves the fields of its validity structure.
+This maps directly to QuickCheck state machine testing: each
+preservation theorem becomes a property that generates valid states,
+applies the transition, and asserts the invariant holds after.
+
 ### Trust model
 
 The server is untrusted. Clients perform all cryptographic operations:
