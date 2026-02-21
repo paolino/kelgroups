@@ -11,7 +11,6 @@ import Control.Exception (bracket)
 import Data.Text (Text, pack)
 import KelGroups.Server (ServerEnv (..), mkApp)
 import KelGroups.Store (closeKEL, openKEL)
-import KelGroups.Store.Serialise ()
 import KelGroups.Trivial
     ( trivialConfig
     , trivialFold

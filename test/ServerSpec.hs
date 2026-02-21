@@ -20,7 +20,6 @@ import Control.Concurrent.STM
     )
 import Data.Aeson
     ( FromJSON (..)
-    , ToJSON (..)
     , decode
     , encode
     , withObject
@@ -28,6 +27,7 @@ import Data.Aeson
     )
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -36,13 +36,16 @@ import KelGroups.Event
     , GroupEvent (..)
     , Proposal (..)
     )
-import KelGroups.Server (ServerEnv (..), mkApp)
+import KelGroups.Server (ServerEnv (..), mkApp, mkKeriEvent)
 import KelGroups.Server.JSON
     ( AppendResult (..)
     , Submission (..)
     )
-import KelGroups.Store (closeKEL, openKEL)
-import KelGroups.Store.Serialise ()
+import KelGroups.Store
+    ( ChainTip (..)
+    , closeKEL
+    , openKEL
+    )
 import KelGroups.Trivial
     ( trivialConfig
     , trivialFold
@@ -53,6 +56,13 @@ import Keri.Cesr.DerivationCode (DerivationCode (..))
 import Keri.Cesr.Encode qualified as Cesr
 import Keri.Cesr.Primitive (Primitive (..))
 import Keri.Crypto.Ed25519 qualified as Ed25519
+import Keri.Event
+    ( Event
+    , eventDigest
+    , eventPrefix
+    , eventSequenceNumber
+    )
+import Keri.Event.Serialize (serializeEvent)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types
     ( status200
@@ -100,20 +110,27 @@ newSTestId = do
                     }
     pure STestId{stKeyPair = kp, stKey = cesrKey}
 
--- | Sign an event with a test identity.
-signEvt :: (ToJSON a) => STestId -> a -> Text
-signEvt tid evt =
-    let msg = LBS.toStrict (encode evt)
-        sigBytes =
-            Ed25519.sign (stKeyPair tid) msg
+{- | Sign a KERI event with a test identity.
+Returns the CESR-encoded Ed25519 signature.
+-}
+signKeri :: STestId -> Event -> Text
+signKeri tid keriEvt =
+    let msg = serializeEvent keriEvt
+        sigBytes = Ed25519.sign (stKeyPair tid) msg
     in  Cesr.encode
             Primitive
                 { code = Ed25519Sig
                 , raw = sigBytes
                 }
 
+-- | Test context: port + tip tracking.
+data TestCtx = TestCtx
+    { tcPort :: Warp.Port
+    , tcTip :: IORef (Maybe ChainTip)
+    }
+
 -- | Set up a test server on a random port.
-withTestApp :: (Warp.Port -> IO a) -> IO a
+withTestApp :: (TestCtx -> IO a) -> IO a
 withTestApp action = do
     dbPath <- emptySystemTempFile "kelgroups-test-.db"
     store <- openKEL trivialFold trivialInitial dbPath
@@ -126,10 +143,13 @@ withTestApp action = do
                 , envPassphrase = testPass
                 , envBroadcast = ch
                 }
+    tipRef <- newIORef Nothing
     result <-
         Warp.testWithApplication
             (pure $ mkApp env Nothing)
-            action
+            ( \port ->
+                action TestCtx{tcPort = port, tcTip = tipRef}
+            )
     closeKEL store
     removeFile dbPath
     pure result
@@ -137,26 +157,30 @@ withTestApp action = do
 -- | Make a GET request to the test server.
 httpGet
     :: HC.Manager
-    -> Warp.Port
+    -> TestCtx
     -> String
     -> IO (HC.Response LBS.ByteString)
-httpGet mgr port path = do
+httpGet mgr ctx path = do
     req <-
         HC.parseRequest $
-            "http://127.0.0.1:" <> show port <> path
+            "http://127.0.0.1:"
+                <> show (tcPort ctx)
+                <> path
     HC.httpLbs req mgr
 
 -- | Make a POST request with JSON body.
 httpPost
     :: HC.Manager
-    -> Warp.Port
+    -> TestCtx
     -> String
     -> LBS.ByteString
     -> IO (HC.Response LBS.ByteString)
-httpPost mgr port path body = do
+httpPost mgr ctx path body = do
     initReq <-
         HC.parseRequest $
-            "http://127.0.0.1:" <> show port <> path
+            "http://127.0.0.1:"
+                <> show (tcPort ctx)
+                <> path
     let req =
             initReq
                 { HC.method = "POST"
@@ -172,12 +196,12 @@ decodeOrFail bs = case decode bs of
     Just x -> pure x
     Nothing -> error "JSON decode failed"
 
-{- | A bootstrap submission with real signing. The
-signer introduces themselves as admin (self-bootstrap).
-Returns the submission and the STestId for the admin.
+{- | Build a signed bootstrap submission. The signer
+introduces themselves as admin.
 -}
-mkBootstrapSubmission :: IO (Submission (), STestId)
-mkBootstrapSubmission = do
+mkBootstrapSub
+    :: TestCtx -> IO (Submission (), STestId)
+mkBootstrapSub ctx = do
     admin1 <- newSTestId
     let evt :: GroupEvent ()
         evt =
@@ -189,15 +213,72 @@ mkBootstrapSubmission = do
                         ( Set.singleton
                             (AdminRole PublicAdmin)
                         )
+    tip <- readIORef (tcTip ctx)
+    let keriEvt =
+            mkKeriEvent tip (stKey admin1) evt
+        sig = signKeri admin1 keriEvt
     pure
         ( Submission
             { subPassphrase = Just testPass
             , subSigner = stKey admin1
-            , subSignature = signEvt admin1 evt
+            , subSignature = sig
+            , subPriorDigest = fmap tipDigest tip
             , subEvent = evt
             }
         , admin1
         )
+
+{- | Post a bootstrap submission and update the
+client-side chain tip.
+-}
+postBootstrap
+    :: HC.Manager
+    -> TestCtx
+    -> IO (Submission (), STestId)
+postBootstrap mgr ctx = do
+    (sub, admin1) <- mkBootstrapSub ctx
+    resp <-
+        httpPost mgr ctx "/events" (encode sub)
+    HC.responseStatus resp `shouldBe` status200
+    updateTip ctx (stKey admin1) (subEvent sub)
+    pure (sub, admin1)
+
+{- | Build and post a signed submission for a group
+event in normal mode.
+-}
+postNormalSub
+    :: HC.Manager
+    -> TestCtx
+    -> STestId
+    -> GroupEvent ()
+    -> IO (HC.Response LBS.ByteString)
+postNormalSub mgr ctx tid evt = do
+    tip <- readIORef (tcTip ctx)
+    let keriEvt = mkKeriEvent tip (stKey tid) evt
+        sig = signKeri tid keriEvt
+        sub =
+            Submission
+                { subPassphrase = Nothing
+                , subSigner = stKey tid
+                , subSignature = sig
+                , subPriorDigest = fmap tipDigest tip
+                , subEvent = evt
+                }
+    httpPost mgr ctx "/events" (encode sub)
+
+-- | Update client-side chain tip after a successful append.
+updateTip :: TestCtx -> Text -> GroupEvent () -> IO ()
+updateTip ctx signer evt = do
+    tip <- readIORef (tcTip ctx)
+    let keriEvt = mkKeriEvent tip signer evt
+        newTip =
+            ChainTip
+                { tipPrefix = eventPrefix keriEvt
+                , tipSeqNo =
+                    eventSequenceNumber keriEvt
+                , tipDigest = eventDigest keriEvt
+                }
+    writeIORef (tcTip ctx) (Just newTip)
 
 -- | Helper to extract a text field from JSON response.
 data ConditionResp = ConditionResp
@@ -226,40 +307,41 @@ spec = describe "KelGroups.Server (HTTP)" $ do
     around withTestApp $ do
         describe "GET /condition" $ do
             it "empty KEL: non-member gets 403" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
                     resp <-
                         httpGet
                             mgr
-                            port
+                            ctx
                             "/condition?key=anyone"
                     HC.responseStatus resp
                         `shouldBe` status403
 
             it "empty KEL: missing key gets 401" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    resp <- httpGet mgr port "/condition"
+                    resp <-
+                        httpGet mgr ctx "/condition"
                     HC.responseStatus resp
                         `shouldBe` status401
 
         describe "POST /events" $ do
             it
                 "bootstrap with correct passphrase succeeds"
-                $ \port -> do
+                $ \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
                     (sub, _admin1) <-
-                        mkBootstrapSubmission
+                        mkBootstrapSub ctx
                     resp <-
                         httpPost
                             mgr
-                            port
+                            ctx
                             "/events"
                             (encode sub)
                     HC.responseStatus resp
@@ -269,11 +351,11 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                     sequenceNumber ar `shouldBe` 1
 
             it "wrong passphrase returns 401" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, _) <- mkBootstrapSubmission
+                    (sub, _) <- mkBootstrapSub ctx
                     let sub' =
                             sub
                                 { subPassphrase =
@@ -282,7 +364,7 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                     resp <-
                         httpPost
                             mgr
-                            port
+                            ctx
                             "/events"
                             (encode sub')
                     HC.responseStatus resp
@@ -290,11 +372,11 @@ spec = describe "KelGroups.Server (HTTP)" $ do
 
             it
                 "missing passphrase in bootstrap returns 401"
-                $ \port -> do
+                $ \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, _) <- mkBootstrapSubmission
+                    (sub, _) <- mkBootstrapSub ctx
                     let sub' =
                             sub
                                 { subPassphrase = Nothing
@@ -302,7 +384,7 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                     resp <-
                         httpPost
                             mgr
-                            port
+                            ctx
                             "/events"
                             (encode sub')
                     HC.responseStatus resp
@@ -310,22 +392,16 @@ spec = describe "KelGroups.Server (HTTP)" $ do
 
         describe "GET /events" $ do
             it "after submit returns event" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, admin1) <-
-                        mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                    (_, admin1) <-
+                        postBootstrap mgr ctx
                     resp <-
                         httpGet
                             mgr
-                            port
+                            ctx
                             ( "/events?after=-1&key="
                                 <> T.unpack (stKey admin1)
                             )
@@ -333,43 +409,31 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                         `shouldBe` status200
 
             it "non-member gets 403" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, _) <- mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                    _ <- postBootstrap mgr ctx
                     resp <-
                         httpGet
                             mgr
-                            port
+                            ctx
                             "/events?after=-1&key=nobody"
                     HC.responseStatus resp
                         `shouldBe` status403
 
         describe "POST + GET roundtrip" $ do
             it "submitted event matches retrieved" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
                     (sub, admin1) <-
-                        mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                        postBootstrap mgr ctx
                     resp <-
                         httpGet
                             mgr
-                            port
+                            ctx
                             ( "/events?after=0&key="
                                 <> T.unpack (stKey admin1)
                             )
@@ -382,22 +446,16 @@ spec = describe "KelGroups.Server (HTTP)" $ do
 
         describe "GET /condition reflects changes" $ do
             it "after bootstrap, mode is normal" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, admin1) <-
-                        mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                    (_, admin1) <-
+                        postBootstrap mgr ctx
                     resp <-
                         httpGet
                             mgr
-                            port
+                            ctx
                             ( "/condition?key="
                                 <> T.unpack (stKey admin1)
                             )
@@ -409,17 +467,11 @@ spec = describe "KelGroups.Server (HTTP)" $ do
 
         describe "validation errors" $ do
             it "invalid event in normal mode returns 422" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, _) <- mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                    _ <- postBootstrap mgr ctx
                     -- Now try invalid: non-member proposing
                     nobody <- newSTestId
                     k2 <- newSTestId
@@ -437,82 +489,58 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                                                 PublicAdmin
                                             )
                                         )
-                        badSub :: Submission ()
-                        badSub =
-                            Submission
-                                { subPassphrase =
-                                    Nothing
-                                , subSigner =
-                                    stKey nobody
-                                , subSignature =
-                                    signEvt
-                                        nobody
-                                        badEvt
-                                , subEvent = badEvt
-                                }
                     resp <-
-                        httpPost
+                        postNormalSub
                             mgr
-                            port
-                            "/events"
-                            (encode badSub)
+                            ctx
+                            nobody
+                            badEvt
                     HC.responseStatus resp
                         `shouldBe` status422
 
         describe "unknown route" $ do
             it "returns 404" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
                     resp <-
-                        httpGet mgr port "/nonexistent"
+                        httpGet mgr ctx "/nonexistent"
                     HC.responseStatus resp
                         `shouldBe` status404
 
         describe "GET /info" $ do
             it "returns public admin emails" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, _) <- mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                    _ <- postBootstrap mgr ctx
                     resp <-
                         httpGet
                             mgr
-                            port
+                            ctx
                             "/info?key=nobody"
                     HC.responseStatus resp
                         `shouldBe` status200
 
         describe "SSE /stream" $ do
             it "receives notification after POST" $
-                \port -> do
+                \ctx -> do
                     mgr <-
                         HC.newManager
                             HC.defaultManagerSettings
-                    (sub, admin1) <-
-                        mkBootstrapSubmission
-                    _ <-
-                        httpPost
-                            mgr
-                            port
-                            "/events"
-                            (encode sub)
+                    (_, admin1) <-
+                        postBootstrap mgr ctx
                     resultChan <- newTChanIO
                     listener <- async $ do
                         initReq <-
                             HC.parseRequest $
                                 "http://127.0.0.1:"
-                                    <> show port
+                                    <> show (tcPort ctx)
                                     <> "/stream?key="
-                                    <> T.unpack (stKey admin1)
+                                    <> T.unpack
+                                        (stKey admin1)
                         HC.withResponse initReq mgr $
                             \resp -> do
                                 chunk <-
@@ -534,25 +562,14 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                                             <> "@test.example"
                                         )
                                         Set.empty
-                        sub2 :: Submission ()
-                        sub2 =
-                            Submission
-                                { subPassphrase =
-                                    Nothing
-                                , subSigner =
-                                    stKey admin1
-                                , subSignature =
-                                    signEvt
-                                        admin1
-                                        sub2Evt
-                                , subEvent = sub2Evt
-                                }
-                    _ <-
-                        httpPost
+                    resp <-
+                        postNormalSub
                             mgr
-                            port
-                            "/events"
-                            (encode sub2)
+                            ctx
+                            admin1
+                            sub2Evt
+                    HC.responseStatus resp
+                        `shouldBe` status200
                     result <-
                         race
                             (threadDelay 2000000)

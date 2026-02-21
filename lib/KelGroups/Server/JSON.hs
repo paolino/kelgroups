@@ -60,6 +60,8 @@ data Submission a = Submission
     -- ^ CESR-encoded public key
     , subSignature :: Text
     -- ^ CESR-encoded Ed25519 signature
+    , subPriorDigest :: Maybe Text
+    -- ^ SAID of last event (stale-tip detection)
     , subEvent :: GroupEvent a
     -- ^ The event to append
     }
@@ -77,6 +79,7 @@ data ServerError
     | PassphraseRequired
     | WrongPassphrase
     | SignatureError Text
+    | StaleTip Text Text
     | BadRequest Text
     deriving stock (Show, Eq)
 
@@ -382,6 +385,7 @@ instance (ToJSON a) => ToJSON (Submission a) where
             [ "passphrase" .= subPassphrase s
             , "signer" .= subSigner s
             , "signature" .= subSignature s
+            , "priorDigest" .= subPriorDigest s
             , "event" .= subEvent s
             ]
 
@@ -391,6 +395,7 @@ instance (FromJSON a) => FromJSON (Submission a) where
             <$> o .:? "passphrase"
             <*> o .: "signer"
             <*> o .: "signature"
+            <*> o .:? "priorDigest"
             <*> o .: "event"
 
 -- --------------------------------------------------------
@@ -427,6 +432,12 @@ instance ToJSON ServerError where
             [ "error" .= ("signatureError" :: Text)
             , "message" .= msg
             ]
+    toJSON (StaleTip expected got) =
+        object
+            [ "error" .= ("staleTip" :: Text)
+            , "expected" .= expected
+            , "got" .= got
+            ]
     toJSON (BadRequest msg) =
         object
             [ "error" .= ("badRequest" :: Text)
@@ -445,6 +456,10 @@ instance FromJSON ServerError where
                 pure WrongPassphrase
             "signatureError" ->
                 SignatureError <$> o .: "message"
+            "staleTip" ->
+                StaleTip
+                    <$> o .: "expected"
+                    <*> o .: "got"
             "badRequest" ->
                 BadRequest <$> o .: "message"
             _ ->

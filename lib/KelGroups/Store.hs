@@ -1,26 +1,30 @@
 {- |
 Module      : KelGroups.Store
-Description : SQLite-backed KEL store with random access
+Description : SQLite-backed KEL store with KERI events
 Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 Persistent append-only event store backed by SQLite.
-Each event is CBOR-encoded and stored as a blob. The
-in-memory group state is kept in a 'TVar' and updated
-incrementally on each append. Clients can request events
-from any index onward for catch-up.
+Each event is a KERI event stored as canonical JSON
+alongside the signer key and CESR signature. The
+group event anchor is stored separately for fast
+replay without KERI event parsing. Chain metadata
+(prefix, sequence number, digest) is stored per row
+for efficient chain-tip recovery.
 -}
 module KelGroups.Store
     ( KELStore (..)
+    , ChainTip (..)
+    , StoredEvent (..)
     , openKEL
     , closeKEL
     , appendEvent
     , readState
     , readEventsFrom
     , kelLength
+    , chainTip
     ) where
 
-import Codec.Serialise (Serialise, deserialise, serialise)
 import Control.Concurrent.STM
     ( TVar
     , atomically
@@ -29,8 +33,11 @@ import Control.Concurrent.STM
     , readTVarIO
     , writeTVar
     )
+import Data.Aeson (FromJSON, ToJSON, decode, encode)
+import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Text (Text)
+import Data.Text.Encoding qualified as TE
 import Database.SQLite.Simple
     ( Connection
     , Only (..)
@@ -42,9 +49,42 @@ import Database.SQLite.Simple
     , query_
     )
 import KelGroups.Event (GroupEvent)
-import KelGroups.Fold (AppFold, applyEvent)
+import KelGroups.Fold (AppFold)
+import KelGroups.Fold qualified as Fold
+import KelGroups.Server.JSON ()
 import KelGroups.State (GroupState, emptyState)
-import KelGroups.Store.Serialise ()
+import Keri.Event
+    ( Event
+    , eventDigest
+    , eventPrefix
+    , eventSequenceNumber
+    )
+import Keri.Event.Serialize (serializeEvent)
+
+-- | Current tip of the KERI chain.
+data ChainTip = ChainTip
+    { tipPrefix :: Text
+    -- ^ Identifier prefix (from inception SAID)
+    , tipSeqNo :: Int
+    -- ^ Sequence number of the last event
+    , tipDigest :: Text
+    -- ^ SAID of the last event
+    }
+    deriving stock (Show, Eq)
+
+{- | A stored event as returned by 'readEventsFrom'.
+Contains everything a client needs to verify the
+chain independently.
+-}
+data StoredEvent = StoredEvent
+    { seSigner :: Text
+    -- ^ CESR-encoded signer public key
+    , seEventBytes :: ByteString
+    -- ^ Canonical JSON of the KERI event
+    , seSignature :: Text
+    -- ^ CESR-encoded Ed25519 signature
+    }
+    deriving stock (Show, Eq)
 
 -- | A handle to a SQLite-backed KEL.
 data KELStore a = KELStore
@@ -52,14 +92,18 @@ data KELStore a = KELStore
     -- ^ SQLite connection
     , stateVar :: TVar (GroupState a)
     -- ^ Hot state updated incrementally
+    , tipVar :: TVar (Maybe ChainTip)
+    -- ^ Current chain tip
+    , lengthVar :: TVar Int
+    -- ^ Number of events
     }
 
 {- | Open or create a KEL at the given file path.
 Replays all existing events to rebuild the in-memory
-state.
+state and chain tip.
 -}
 openKEL
-    :: (Serialise a)
+    :: (FromJSON a)
     => AppFold a
     -> a
     -- ^ Initial application fold value
@@ -72,78 +116,174 @@ openKEL appFoldFn initial path = do
         "CREATE TABLE IF NOT EXISTS events \
         \( id INTEGER PRIMARY KEY AUTOINCREMENT \
         \, signer TEXT NOT NULL \
-        \, event BLOB NOT NULL \
+        \, event_bytes TEXT NOT NULL \
+        \, signature TEXT NOT NULL \
+        \, group_event TEXT NOT NULL \
+        \, prefix TEXT NOT NULL \
+        \, seq_no INTEGER NOT NULL \
+        \, digest TEXT NOT NULL \
         \)"
+    -- Replay group events for business state
     rows <-
         query_
             conn
-            "SELECT signer, event FROM events \
+            "SELECT signer, group_event FROM events \
             \ORDER BY id"
             :: IO [(Text, LBS.ByteString)]
-    let events = map decodeRow rows
-        gs = foldl (applyEvent appFoldFn) (emptyState initial) events
-    var <- newTVarIO gs
-    pure KELStore{storeConn = conn, stateVar = var}
+    let gs =
+            foldl
+                (replayRow appFoldFn)
+                (emptyState initial)
+                rows
+    -- Recover chain tip from last row
+    tipRows <-
+        query_
+            conn
+            "SELECT prefix, seq_no, digest \
+            \FROM events ORDER BY id DESC LIMIT 1"
+            :: IO [(Text, Int, Text)]
+    let tip' = case tipRows of
+            [(p, s, d)] ->
+                Just
+                    ChainTip
+                        { tipPrefix = p
+                        , tipSeqNo = s
+                        , tipDigest = d
+                        }
+            _ -> Nothing
+    stVar <- newTVarIO gs
+    tVar <- newTVarIO tip'
+    [Only n] <-
+        query_
+            conn
+            "SELECT COUNT(*) FROM events"
+    lVar <- newTVarIO (n :: Int)
+    pure
+        KELStore
+            { storeConn = conn
+            , stateVar = stVar
+            , tipVar = tVar
+            , lengthVar = lVar
+            }
 
 -- | Close the KEL store.
 closeKEL :: KELStore a -> IO ()
 closeKEL = close . storeConn
 
-{- | Append a validated event. Persists to SQLite and
-updates the in-memory state atomically.
+{- | Append a verified event. Persists to SQLite and
+updates the in-memory state. The caller is
+responsible for constructing and verifying the KERI
+event and signature before calling this.
 -}
 appendEvent
-    :: (Serialise a)
+    :: (ToJSON a)
     => KELStore a
     -> AppFold a
-    -> (Text, GroupEvent a)
+    -> Text
+    -- ^ Signer CESR public key
+    -> Event
+    -- ^ Constructed KERI event
+    -> Text
+    -- ^ CESR-encoded Ed25519 signature
+    -> GroupEvent a
+    -- ^ The anchor (group event) for folding
     -> IO ()
-appendEvent store appFoldFn entry@(signer, evt) = do
-    let blob = serialise evt
-    execute
-        (storeConn store)
-        "INSERT INTO events (signer, event) VALUES (?, ?)"
-        (signer, blob)
-    atomically $ do
-        gs <- readTVar (stateVar store)
-        writeTVar (stateVar store) $
-            applyEvent appFoldFn gs entry
+appendEvent store appFoldFn signer evt sig groupEvt =
+    do
+        let eventBytes =
+                TE.decodeUtf8 (serializeEvent evt)
+            groupJson = encode groupEvt
+            prefix' = eventPrefix evt
+            seqNo = eventSequenceNumber evt
+            digest' = eventDigest evt
+        execute
+            (storeConn store)
+            "INSERT INTO events \
+            \(signer, event_bytes, signature, \
+            \group_event, prefix, seq_no, digest) \
+            \VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ( signer
+            , eventBytes
+            , sig
+            , groupJson
+            , prefix'
+            , seqNo
+            , digest'
+            )
+        let newTip =
+                ChainTip
+                    { tipPrefix = prefix'
+                    , tipSeqNo = seqNo
+                    , tipDigest = digest'
+                    }
+        atomically $ do
+            gs <- readTVar (stateVar store)
+            writeTVar (stateVar store) $
+                Fold.applyEvent
+                    appFoldFn
+                    gs
+                    (signer, groupEvt)
+            writeTVar (tipVar store) (Just newTip)
+            n <- readTVar (lengthVar store)
+            writeTVar (lengthVar store) (n + 1)
 
 -- | Read current state (from TVar, O(1)).
 readState :: KELStore a -> IO (GroupState a)
 readState = readTVarIO . stateVar
 
 {- | Read events from index @n@ onward (1-based,
-matching SQLite rowid). Returns events in order.
+matching SQLite rowid). Returns events in order
+with the data clients need for chain verification.
 -}
 readEventsFrom
-    :: (Serialise a)
-    => KELStore a
+    :: KELStore a
     -> Int
-    -> IO [(Text, GroupEvent a)]
+    -> IO [StoredEvent]
 readEventsFrom store n = do
     rows <-
         query
             (storeConn store)
-            "SELECT signer, event FROM events \
-            \WHERE id >= ? ORDER BY id"
+            "SELECT signer, event_bytes, signature \
+            \FROM events WHERE id >= ? ORDER BY id"
             (Only n)
-            :: IO [(Text, LBS.ByteString)]
-    pure $ map decodeRow rows
+            :: IO [(Text, Text, Text)]
+    pure $ map toStoredEvent rows
+  where
+    toStoredEvent (s, eb, sig) =
+        StoredEvent
+            { seSigner = s
+            , seEventBytes = TE.encodeUtf8 eb
+            , seSignature = sig
+            }
 
 -- | Number of events in the KEL.
 kelLength :: KELStore a -> IO Int
-kelLength store = do
-    [Only n] <-
-        query_
-            (storeConn store)
-            "SELECT COUNT(*) FROM events"
-    pure n
+kelLength = readTVarIO . lengthVar
 
--- | Decode a row from the database.
-decodeRow
-    :: (Serialise a)
-    => (Text, LBS.ByteString)
-    -> (Text, GroupEvent a)
-decodeRow (signer, blob) =
-    (signer, deserialise blob)
+{- | Get the current chain tip, or 'Nothing' if the
+KEL is empty (no inception yet).
+-}
+chainTip :: KELStore a -> IO (Maybe ChainTip)
+chainTip = readTVarIO . tipVar
+
+-- --------------------------------------------------------
+-- Internal helpers
+-- --------------------------------------------------------
+
+{- | Replay a single row into the group state.
+Decodes the stored group event JSON.
+-}
+replayRow
+    :: (FromJSON a)
+    => AppFold a
+    -> GroupState a
+    -> (Text, LBS.ByteString)
+    -> GroupState a
+replayRow appFoldFn gs (signer, groupJson) =
+    case decode groupJson of
+        Just groupEvt ->
+            Fold.applyEvent
+                appFoldFn
+                gs
+                (signer, groupEvt)
+        Nothing -> gs

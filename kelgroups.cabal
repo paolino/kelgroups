@@ -41,7 +41,6 @@ library
     KelGroups.Server.JSON
     KelGroups.State
     KelGroups.Store
-    KelGroups.Store.Serialise
     KelGroups.Trivial
     KelGroups.Types
     KelGroups.Validate
@@ -53,7 +52,6 @@ library
     , containers     >=0.6  && <0.8
     , http-types     >=0.12 && <0.13
     , keri-hs
-    , serialise      >=0.2  && <0.3
     , sqlite-simple  >=0.4  && <0.5
     , stm            >=2.5  && <2.7
     , text           >=2.0  && <2.2

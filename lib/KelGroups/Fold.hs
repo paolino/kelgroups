@@ -20,6 +20,7 @@ module KelGroups.Fold
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
+import Data.Text.Encoding qualified as TE
 import KelGroups.Event
     ( BaseEvent (..)
     , GroupEvent (..)
@@ -32,6 +33,7 @@ import KelGroups.State
     , majority
     )
 import KelGroups.Types (Member (..))
+import Keri.Crypto.Digest (computeSaid)
 
 {- | Application fold function. Given the current
 application fold result and an application event,
@@ -177,11 +179,11 @@ enact gs = \case
                     (members gs)
             }
 
-{- | Compute a proposal digest. This is a placeholder
-that uses 'show' — in production this should use a
-proper cryptographic hash via keri-hs.
+{- | Compute a proposal digest using SAID. The
+proposal's 'show' representation is hashed via
+keri-hs 'computeSaid' to produce a CESR-encoded
+Blake2b-256 digest.
 -}
 proposalDigest :: Proposal -> Text
 proposalDigest p =
-    -- TODO: use proper SAID/hash via keri-hs
-    "proposal:" <> pack (show p)
+    computeSaid $ TE.encodeUtf8 $ pack $ show p

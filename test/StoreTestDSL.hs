@@ -6,12 +6,13 @@ License     : Apache-2.0
 
 Combinators that mirror Lean quantifier patterns for
 testing invariants through the full store roundtrip
-(CBOR encode → SQLite write → read → decode → fold).
+(KERI event construction → SQLite write → read → fold).
 -}
 module StoreTestDSL
     ( -- * Store helpers
       withStore
     , replayHistory
+    , appendTestEvent
 
       -- * DSL combinators
     , onReachable
@@ -23,6 +24,12 @@ module StoreTestDSL
     ) where
 
 import Control.Monad (forM_)
+import Data.IORef
+    ( IORef
+    , newIORef
+    , readIORef
+    , writeIORef
+    )
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
@@ -32,6 +39,7 @@ import KelGroups.Event
     , Proposal (..)
     )
 import KelGroups.Fold (applyEvent)
+import KelGroups.Server (mkKeriEvent)
 import KelGroups.State
     ( GroupState (..)
     , adminCount
@@ -39,18 +47,23 @@ import KelGroups.State
     , isAdmin
     )
 import KelGroups.Store
-    ( KELStore
+    ( ChainTip (..)
+    , KELStore
     , appendEvent
     , closeKEL
     , openKEL
     , readState
     )
-import KelGroups.Store.Serialise ()
 import KelGroups.Trivial
     ( trivialFold
     , trivialInitial
     )
 import KelGroups.Types (Admin (..), Role (..))
+import Keri.Event
+    ( eventDigest
+    , eventPrefix
+    , eventSequenceNumber
+    )
 import System.Directory (removeFile)
 import System.IO.Temp (emptySystemTempFile)
 import Test.QuickCheck
@@ -82,13 +95,41 @@ withStore action = do
     removeFile path
     pure result
 
+{- | Append a (signer, groupEvent) pair through the full
+KERI event pipeline. Tracks the chain tip via IORef.
+-}
+appendTestEvent
+    :: KELStore ()
+    -> IORef (Maybe ChainTip)
+    -> (Text, GroupEvent ())
+    -> IO ()
+appendTestEvent store tipRef (signer, groupEvt) = do
+    tip <- readIORef tipRef
+    let keriEvt = mkKeriEvent tip signer groupEvt
+    appendEvent
+        store
+        trivialFold
+        signer
+        keriEvt
+        "test-sig"
+        groupEvt
+    writeIORef tipRef $
+        Just
+            ChainTip
+                { tipPrefix = eventPrefix keriEvt
+                , tipSeqNo =
+                    eventSequenceNumber keriEvt
+                , tipDigest = eventDigest keriEvt
+                }
+
 {- | Replay a history of signed events through the
 store and return the resulting group state.
 -}
 replayHistory
     :: [(Text, GroupEvent ())] -> IO (GroupState ())
 replayHistory events = withStore $ \store -> do
-    forM_ events $ appendEvent store trivialFold
+    tipRef <- newIORef Nothing
+    forM_ events $ appendTestEvent store tipRef
     readState store
 
 -- --------------------------------------------------------
