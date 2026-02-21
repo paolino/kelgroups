@@ -11,6 +11,10 @@ import KelGroups.KEL
 
 namespace KelGroups
 
+open KERI.Crypto
+open KERI.Event
+open KERI.KEL (hashChainValid)
+
 -- ============================================================
 -- INV 10: Threshold properties
 -- ============================================================
@@ -110,17 +114,6 @@ theorem inception_only_no_duplicates
       [KELEvent.mk 0 none (.inception prop nonce timeout) sk sigV]
     := by
   simp [l2NoDuplicateApprovals, List.filterMap]
-
--- ============================================================
--- Hash chain: singleton is valid
--- ============================================================
-
-/-- A single inception event is a valid hash chain. -/
-theorem singleton_chain_valid {α : Type}
-    (payload : α) (sk : Key) (sigV : Signature) :
-    hashChainValid
-      [KELEvent.mk 0 none payload sk sigV] := by
-  simp [hashChainValid]
 
 -- ============================================================
 -- L2 timeout
