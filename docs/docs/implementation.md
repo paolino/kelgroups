@@ -3,8 +3,10 @@
 ## Nix Setup
 
 - **haskell.nix** with GHC 9.8.4
-- `keri-hs` as flake input (crypto, CESR, KEL primitives)
-- Dev shell includes: cabal, fourmolu, hlint, hoogle, cabal-fmt, just, lean4, mkdocs
+- [keri-hs](https://github.com/paolino/keri-hs) as flake input (KERI events, CESR encoding, Ed25519 crypto, KEL primitives)
+- [keri-purs](https://github.com/paolino/keri-purs) as spago git dependency (PureScript KERI events, CESR, Ed25519, KEL replay)
+- [keri-lean](https://github.com/paolino/keri-lean) as lake git dependency (generic KERI types for Lean proofs)
+- Dev shell includes: cabal, fourmolu, hlint, hoogle, cabal-fmt, just, lean4, mkdocs, purescript, spago
 
 ## Cabal Package
 
@@ -143,6 +145,8 @@ HTTP interface via warp + wai with JSON encoding (aeson).
 
 ## Lean 4 Proofs
 
+Generic KERI types (`Digest`, `SAID`, `Key`, `KELEvent`, `KEL`, `hashChainValid`) are imported from [keri-lean](https://github.com/paolino/keri-lean). kelgroups-specific types and all 9 proof files are local.
+
 Invariants proven in `lean/KelGroups/Invariants.lean`:
 
 | Theorem | Statement |
@@ -203,7 +207,7 @@ The `arbitraryHistory` generator produces valid event histories by tracking stat
 
 ## CI
 
-- **Build + Test**: `nix develop -c just ci` (format, cabal-fmt, lint, build, test, lean)
+- **Build + Test**: `nix develop -c just ci` (format, cabal-fmt, lint, build, test, lean, client)
 - **Docs**: MkDocs deployed to GitHub Pages on push to main
 
 ## Justfile Recipes
@@ -216,7 +220,10 @@ The `arbitraryHistory` generator produces valid event histories by tracking stat
 | `lint` | `hlint lib/` |
 | `cabal-fmt` | `cabal-fmt -i kelgroups.cabal` |
 | `lean` | `cd lean && lake build` |
-| `ci` | format + cabal-fmt + lint + build + test + lean |
+| `build-client` | `cd client && npm install && spago build` |
+| `bundle-client` | build + bundle PureScript client |
+| `test-client` | `cd client && spago -x test.dhall test` |
+| `ci` | format + cabal-fmt + lint + build + test + lean + client |
 | `docs` | `mkdocs build` |
 | `serve` | `cabal run kelgroups-server -O0 -- <port> <db> <pass>` |
 | `clean` | cabal clean + lake clean |

@@ -20,8 +20,16 @@ The KEL is a pure data structure. Folding it produces the **current condition** 
 |---|---|---|
 | `kelgroups` | Haskell | Polymorphic base system library |
 | `kelgroups-server` | Haskell | Server parameterized by application plugin |
-| `kelgroups-ps` | PureScript | Client-side KEL handling and identity |
-| `kelgroups-app` | PureScript | UI client, parameterized by plugins |
+| `kelgroups-client` | PureScript | Client-side KEL handling, API, and state |
+| `kelgroups-trivial` | PureScript | Halogen reference UI |
+
+### Dependencies
+
+| Dependency | Language | Provides |
+|---|---|---|
+| [keri-hs](https://github.com/paolino/keri-hs) | Haskell | KERI events, CESR encoding, Ed25519 crypto, KEL primitives |
+| [keri-purs](https://github.com/paolino/keri-purs) | PureScript | KERI events, CESR encoding, Ed25519 crypto, KEL replay |
+| [keri-lean](https://github.com/paolino/keri-lean) | Lean 4 | Generic KERI types (`Digest`, `SAID`, `Key`, `KELEvent`, `hashChainValid`) |
 
 The first instance is **trivial**: no application semantics, just the base system operating alone.
 
@@ -143,17 +151,30 @@ flowchart TB
         LIB["kelgroups (library)<br/>KEL a, Event a<br/>fold, validate<br/>base event logic<br/>role predicates"]
 
         SRV["kelgroups-server<br/>HTTP API<br/>bootstrap auth<br/>parameterized by<br/>RoleDefs a, app event type a"]
+
+        KERIHS["keri-hs<br/>KERI events, CESR<br/>Ed25519, KEL primitives"]
     end
 
     subgraph PureScript
-        PSLIB["kelgroups-ps (library)<br/>KEL types<br/>identity / key mgmt<br/>server communication"]
+        PSLIB["kelgroups-client<br/>API, codec, fold<br/>state management"]
 
-        APP["kelgroups-app (client)<br/>UI<br/>parameterized by<br/>app plugins"]
+        APP["kelgroups-trivial<br/>Halogen reference UI"]
+
+        KERIPURS["keri-purs<br/>KERI events, CESR<br/>Ed25519, KEL replay"]
+    end
+
+    subgraph Lean4
+        KERILEAN["keri-lean<br/>Digest, SAID, Key<br/>KELEvent, hashChainValid"]
+
+        PROOFS["kelgroups proofs<br/>9 files: invariants<br/>validation, transitions"]
     end
 
     SRV --> LIB
+    LIB --> KERIHS
     APP --> PSLIB
-    APP <-->|HTTP| SRV
+    PSLIB --> KERIPURS
+    PROOFS --> KERILEAN
+    APP <-->|HTTP + SSE| SRV
 ```
 
 The server is assembled by supplying an **application plugin**:

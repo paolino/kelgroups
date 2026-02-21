@@ -17,6 +17,7 @@
             "foldable-traversable",
             "foreign-object",
             "integers",
+            "keri-purs",
             "maybe",
             "newtype",
             "nullable",
@@ -658,7 +659,12 @@
         "zipperarray": "2.0.0"
       }
     },
-    "extra_packages": {}
+    "extra_packages": {
+      "keri-purs": {
+        "git": "https://github.com/paolino/keri-purs.git",
+        "ref": "25a4a9887d6414e0634c6c4ed61aead8d1f6d852"
+      }
+    }
   },
   "packages": {
     "aff": {
@@ -1247,6 +1253,31 @@
         "maybe",
         "newtype",
         "prelude"
+      ]
+    },
+    "keri-purs": {
+      "type": "git",
+      "url": "https://github.com/paolino/keri-purs.git",
+      "rev": "25a4a9887d6414e0634c6c4ed61aead8d1f6d852",
+      "dependencies": [
+        "argonaut",
+        "argonaut-codecs",
+        "arraybuffer-types",
+        "arrays",
+        "control",
+        "effect",
+        "either",
+        "foldable-traversable",
+        "foreign-object",
+        "identity",
+        "integers",
+        "maybe",
+        "newtype",
+        "nullable",
+        "ordered-collections",
+        "prelude",
+        "strings",
+        "tuples"
       ]
     },
     "lazy": {
