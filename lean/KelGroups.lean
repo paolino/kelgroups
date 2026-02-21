@@ -5,3 +5,5 @@ import KelGroups.TransitionInvariants
 import KelGroups.Validate
 import KelGroups.ValidateInvariants
 import KelGroups.FoldInvariants
+import KelGroups.KEL
+import KelGroups.KELInvariants

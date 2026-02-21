@@ -164,76 +164,195 @@ duplicity detection, and availability guarantees.
 
 **Decision:** out of scope for now. The server acts as sole witness.
 
-## 4. Architectural Question: One KEL or Many?
+## 4. Architecture: L1/L2 Separation
 
-KERI specifies one KEL per identifier. kelgroups currently has one event log
-for the entire group. Three options:
+### Problem
 
-### Option A: Group-as-identifier
+KERI supports multi-sig with signing thresholds (`kt`), but that
+mechanism authorizes a single event with multiple signatures collected
+at once. kelgroups governance is *asynchronous voting* — admins submit
+separate approval events over time, and a decision is enacted when
+majority is reached.
 
-The group itself IS a KERI identifier. The inception event lists all
-initial admin keys. The signing threshold equals the admin majority.
+Putting the entire voting process on a single chain means L1 is
+cluttered with intermediate votes. Every client must replay the full
+propose/approve sequence to derive the current state. Enacted decisions
+are not directly visible — they are implicit in the fold.
 
-- **Membership changes** = rotation events (new key set, new threshold)
-- **Proposals and approvals** = interaction events with JSON anchors
-- **Group identifier** = SAID of the inception event
+### Design: L1 for outcomes, L2 for voting
 
-**Pros:** simple, one KEL to manage, directly maps to kelgroups' current
-single-log model. keri-hs already supports multi-sig inception.
+**L1 (main KEL)** — the group's primary hash-chained event log.
+The first event is the server's inception event (the server is not an
+admin — it has no voting power). Subsequent events are outcomes:
+enacted decisions and expired proposals. Each enacted event carries the
+proposal SAID and the collected admin approval signatures as proof.
+The fold over L1 is simple — it applies enacted decisions sequentially.
 
-**Cons:** rotation replaces the entire key set, which means every membership
-change requires coordination of all current members. Does not cleanly model
-individual member identity.
+**L2 (per-proposal KELs)** — one ephemeral KEL per proposal, using the
+same code and structure as L1 (signed events, digest chain, SAID). The
+L2 inception event anchors the proposal content and timeout metadata.
+The only interaction events allowed on an L2 are approvals — each
+approval anchors the proposal SAID, signed by the approving admin.
+The server rejects any other event type on L2.
 
-### Option B: Member KELs + group log
+Voting order is irrelevant — it doesn't matter whether Alice approved
+before or after Bob. Only the set of approvals matters. The L2 KEL
+structure is reused because the code already exists, not because
+ordering is meaningful.
 
-Each member has their own KERI KEL (their own identifier, their own key
-rotation). The group maintains a separate log that references member
-identifiers for signature verification.
+**Server identifier** — the server has its own KERI identifier (its own
+keypair, with inception as L1 event 0). It is not an admin and cannot
+approve proposals. It acts as an aggregator: when an L2 reaches
+threshold, the server creates a single interaction event on L1
+containing the proposal SAID and the collected approval signatures
+(extracted from L2 events). The server signs this L1 event, but its
+signature is attestation, not a trust assumption — the embedded admin
+signatures are the real proof, independently verifiable by any client.
 
-- **Member joins** = their KEL's inception event is anchored in the group log
-- **Member key rotation** = happens in their own KEL, group verifies
-  against member's current key state
+### Replay prevention
 
-**Pros:** KERI-orthodox, each member controls their own key lifecycle,
-clean separation of concerns. Supports members participating in
-multiple groups.
+Proposals include a client-generated nonce as part of their content.
+The proposal SAID is computed over the full content including the nonce,
+so identical proposals submitted at different times produce different
+SAIDs. Approval signatures are over the proposal SAID, binding them
+to a specific proposal instance. The L1 enactment carries the proposal
+SAID (which covers the nonce), so any client can verify that approvals
+were not replayed from a different proposal — without needing the L2.
 
-**Cons:** significantly more complex. Group must verify member KELs,
-handle out-of-sync states, manage KEL discovery.
+On L1, the server generates the inception nonce (establishing its own
+identity). On L2, the proposing admin generates the nonce (the proposal
+is the admin's act, not the server's).
 
-### Option C: Hybrid (recommended for incremental adoption)
+The server rejects proposals whose SAID matches any existing or past
+L2 (a simple set of seen SAIDs). This prevents both accidental
+resubmission and intentional replay.
 
-The group has a KEL (option A). Members prove identity via
-challenge-response using their Ed25519 keys, but do not maintain
-individual KELs initially.
+### Lifecycle of a proposal
 
-- **Bootstrap** = group inception with initial admin keys
-- **Authentication** = server issues a challenge, member signs with
-  their key, server verifies against the group's current key state
-- **Key rotation** = deferred until needed
+1. **Propose** — an admin submits a proposal to the server, including
+   a client-generated nonce in the proposal content. The server creates
+   an L2 KEL: inception event anchoring the proposal content (with
+   nonce) and timeout. The proposal's identity = SAID of this inception
+   event, which depends on the admin's nonce.
+2. **Vote** — admins submit approval events to the L2. Each approval
+   is a signed interaction event anchoring the proposal SAID. The
+   server verifies the signature against the current key state and
+   rejects non-admin signers or duplicate approvals.
+3. **Enact** — when the server sees enough approvals on L2 (admin
+   majority), it writes an enacted interaction event on L1. This event
+   anchors: the proposal SAID and the approval signatures (each as an
+   `(admin-key, signature)` pair). This is a compact proof — the full
+   L2 chain is not copied to L1.
+4. **Expire** — if the timeout elapses before threshold is met, the
+   server writes an expired event on L1 referencing the proposal SAID.
+5. **Garbage collect** — after resolution (enacted or expired), the L2
+   KEL can be discarded. The L1 event is the self-contained permanent
+   record.
 
-**Pros:** simple starting point, closes the critical gaps (signature
-verification, self-certifying identifiers, digest chain) without the
-complexity of per-member KELs. Can migrate to option B later by
-introducing member KELs.
+### Timeout enforcement
 
-**Cons:** members cannot independently rotate keys. The group KEL
-must be updated for any key change.
+Each L2 is created with a timeout (set at proposal creation). The
+server enforces it. This is verifiable: if the L2 signatures show
+threshold was met before the timeout, and the server wrote "expired"
+instead, any client with the L2 data can prove the server lied.
 
-### Recommendation
+### Invariants
 
-Start with **Option C** (hybrid). It closes the critical gaps with
-minimal architectural disruption. Option B can be adopted later as
-a separate evolution step once the foundation is solid.
+Formalized in Lean 4: predicate definitions in
+`lean/KelGroups/KEL.lean`, proofs in `lean/KelGroups/KELInvariants.lean`.
+
+1. **L1 is append-only and hash-chained** (`hashChainValid`). Every
+   non-inception event has `priorDigest.isSome` and its sequence
+   number equals its predecessor's plus one. The inception event has
+   `sequenceNumber = 0` and `priorDigest = none`. The predicate is
+   generic — it applies to both L1 and L2 chains.
+
+2. **L1 event 0 is the server's inception** (`l1StartsWithInception`).
+   The oldest L1 event has `sequenceNumber = 0`,
+   `priorDigest = none`, and payload `inception k` for some key `k`.
+   This key is the server's public key (`serverKey`). The server is
+   not an admin and has no voting power.
+
+3. **Only the server writes to L1** (`l1ServerOnly`). Every event in
+   L1 has `signer = serverKey l1`. If the server key cannot be
+   extracted (no valid inception), the predicate is `False`.
+
+4. **Every L1 enacted event is self-contained**
+   (`l1EnactedSelfContained`). For enacted events: the proposal SAID
+   is non-zero (`said ≠ 0`) and at least one approval proof is
+   present (`proofs.length > 0`). Inception and expired events
+   satisfy the predicate trivially. Any client can verify the
+   enactment from L1 alone, without fetching the L2.
+
+5. **Approval signatures are over the proposal SAID**
+   (`l2ApprovalsMatchSAID`). Every approval event in an L2 references
+   the same SAID as the L2's proposal. Inception events satisfy the
+   predicate trivially. This binds each approval to a specific
+   proposal instance.
+
+6. **Proposal SAIDs are unique** (`proposalSAIDsUnique`). The list of
+   proposal SAIDs across all L2s has no duplicates (`List.Nodup`).
+   Each proposal includes a client-generated nonce; the SAID is
+   computed over the full content including the nonce. The server
+   rejects proposals with a previously-seen SAID. Proved: adding a
+   fresh SAID to a unique list preserves uniqueness.
+
+7. **The proposing admin controls the nonce** (`l2InceptionByAdmin`).
+   The L2 inception event is signed by a key that is not the server
+   key and is in the current admin list. The server cannot forge the
+   nonce without invalidating the admin's signature.
+
+8. **L2 only accepts approvals** (`l2OnlyApprovals`). Inception events
+   have `sequenceNumber = 0`; all subsequent events have
+   `sequenceNumber > 0` and are approvals. Only inception at
+   position 0, only approvals after.
+
+9. **No duplicate approvals** (`l2NoDuplicateApprovals`). The signer
+   keys extracted from approval events in an L2 have no duplicates
+   (`List.Nodup`). Each admin approves at most once per proposal.
+
+10. **Threshold = admin majority** (`thresholdMet`). Enactment
+    requires `approvalCount ≥ majority adminCnt` where
+    `majority n = (n + 1) / 2`. Proved: 3 admins / 2 approvals meets
+    threshold; 3 admins / 1 approval does not; 1 admin / 1 approval
+    meets threshold; bootstrap (0/0) satisfies trivially.
+
+11. **L2 has a timeout** (`l2HasTimeout`). The L2 inception event
+    carries a timeout field that is greater than zero. On expiry
+    without threshold, the server writes an expired event on L1.
+    Verifiable: if L2 data shows threshold was met before timeout, a
+    lying server is detectable.
+
+12. **L2 is ephemeral** (`l1EnactmentComplete`). The L1 enacted event
+    carries enough approval proofs to meet threshold independently
+    (`thresholdMet proofs.length adminCnt`). After resolution, the L2
+    can be garbage collected — the L1 event is the self-contained
+    permanent record.
 
 ### Trust model
 
 The server is untrusted. Clients perform all cryptographic operations:
 key generation, event signing, SAID computation. The server's role is
-strictly verification — it checks signatures against the current key
-state but never holds or generates private keys. This is a fundamental
-design constraint that applies to every step below.
+strictly verification and aggregation — it checks signatures against
+the current key state, monitors L2 KELs for threshold/timeout, and
+packages results into L1. It never holds or generates private keys.
+
+The server's own KERI identifier allows it to sign L1 events, but this
+signature is not a trust assumption. It is attestation that the server
+verified the L2 threshold. The approval signatures embedded in the L1
+enactment event are the actual proof — any client can re-verify them
+against the admin keys in the current key state.
+
+### What this replaces
+
+The previous options (A: group-as-identifier, B: member KELs + group
+log, C: hybrid) are superseded by this design. Option C's starting
+point (group KEL with challenge-response auth) is still the foundation
+for L1, but the voting mechanism moves to L2 KELs instead of being
+interleaved on L1.
+
+Per-member KELs (option B) remain a future evolution for individual
+key lifecycle management.
 
 ## 5. Incremental Bridge Path
 
@@ -299,20 +418,40 @@ Closes **Gap 5** (no canonical serialization).
 - **Files:** `Store.hs`, `Store/Serialise.hs` (rename to
   `Store/Serialize.hs`)
 
-### Step 6: Group inception
+### Step 6: Group inception + server identifier
 
 Closes **Gap 6** (no key state machine) partially.
 
 - Bootstrap = group inception event via `mkInception`
 - `InceptionConfig` with initial admin keys and threshold = majority
 - Group identifier = SAID of inception event
-- Subsequent membership changes modeled as rotation or interaction
-  events
+- Server gets its own KERI identifier (keypair + inception event)
+- Server signs L1 events with its own key
 - **Tests:** inception produces valid self-certifying identifier,
-  key state derived correctly
+  key state derived correctly, server identity verifiable
 - **Files:** `Bootstrap.hs`, `Server.hs`
 
-### Step 7: HTTP session authentication
+### Step 7: L2 voting KELs
+
+Implements the L1/L2 separation described in section 4.
+
+- L2 uses the same KEL infrastructure as L1 (same code path)
+- L2 inception anchors proposal content + timeout
+- L2 interactions restricted to approvals (proposal SAID as anchor)
+- Server rejects any other event type on L2
+- Server monitors L2 for threshold (admin majority) or timeout
+- On threshold: server extracts `(admin-key, signature)` pairs from
+  L2 approvals and writes enacted event on L1 with compact proof
+- On timeout: server writes expired event on L1
+- L2 KELs discarded after resolution
+- Client verifies L1 enacted events by checking embedded approval
+  signatures against current key state
+- **Tests:** voting lifecycle (propose → approve → enact), timeout
+  expiry, approval signature verification from L1 events, L2
+  event type restriction
+- **Files:** `Server.hs`, `Fold.hs`
+
+### Step 8: HTTP session authentication
 
 Closes [issue #8](https://github.com/paolino/kelgroups/issues/8).
 
@@ -327,7 +466,6 @@ Closes [issue #8](https://github.com/paolino/kelgroups/issues/8).
 These KERI features are explicitly deferred:
 
 - **Per-member KELs** — each member as their own KERI identifier
-  (option B above)
 - **Key rotation** — pre-committed next keys and rotation events for
   the group
 - **Witness/receipt infrastructure** — out-of-band availability and
