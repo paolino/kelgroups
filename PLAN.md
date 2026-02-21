@@ -1,69 +1,54 @@
-# Plan: Implement KERI Bridge Steps 1+2
+# Plan: KERI Bridge
 
-## Context
+## Progress
 
-The keri-bridge.md gap analysis identifies 7 gaps between kelgroups and
-KERI compliance. This plan implements the first two steps: **CESR keys**
-(Gap 2) and **signed events** (Gap 1). These are tightly coupled —
-signature verification requires valid public keys.
+### Steps 1+2: Signed events + CESR keys — DONE
 
-**Trust model:** Clients perform all cryptographic operations. The server
-is untrusted — it only verifies signatures, never holds private keys.
+Implemented in commit `6795f7d` on `feat/keri-bridge`.
 
-## Changes
+- Ed25519 signature verification on all event submissions
+- CESR key validation on member introduction
+- PureScript client signs events before submitting
+- All tests use real keypairs and signatures
+- 87 Haskell tests, 24 PureScript property tests pass
 
-### 1. Add keri-hs dependency
+**Trust model caveat:** The server verifies what clients submit (input
+sanitization), but clients do not yet verify what the server returns.
+The server signature check keeps the KEL clean but does not make the
+server untrusted from the client's perspective.
 
-- `kelgroups.cabal`: add `keri-hs` to library `build-depends`
-- Verify keri-hs is available in the nix flake
+### Next: Hash-chain events and client-side verification — [#13](https://github.com/paolino/kelgroups/issues/13)
 
-### 2. CESR key validation (Step 2 — do first, Step 1 depends on it)
+This is the **critical** step to achieve the untrusted-server property.
 
-- `Validate.hs`: on `IntroduceMember key _ _`, validate
-  `Cesr.decode key` succeeds and returns `Ed25519PubKey`
-- New `ValidationError` constructor: `InvalidKey Text`
-- `Types.hs`: `memberKey :: Text` stays Text but is now guaranteed valid CESR
+**Core invariant:** When a user signs an event, they sign
+"I append X to a KEL whose tip has digest D" — not just "I authored X."
+The signature commits to the entire history up to that point.
 
-### 3. Signed submissions (Step 1)
+Without this, individual signatures prove authorship but not ordering.
+The server can show different histories to different clients undetected.
 
-- `Server/JSON.hs`: add `subSignature :: Text` to `Submission`
-  (update ToJSON/FromJSON instances)
-- `Server.hs`: after validation, verify signature:
-  1. Serialize the event (the signed message)
-  2. Decode `subSigner` as CESR Ed25519 public key
-  3. Decode `subSignature` as CESR Ed25519 signature
-  4. Verify with Ed25519.verify
-  5. Reject with 401 if verification fails
-- Use aeson `encode` for signing serialization (refined in Step 5)
+**What it requires:**
+- Each event includes `priorDigest` (hash of predecessor)
+- The signed payload includes `priorDigest`
+- Server validates the hash chain on append
+- Server returns `(signer, signature, event)` triples from GET /events
+- Client verifies signatures and digest chain on replay
+- Stale-tip conflicts (concurrent submissions) are rejected; the client
+  shows the user the updated state and lets them re-submit, edit, or
+  discard their draft event
 
-### 4. Test helpers — real keypairs
+See [#13](https://github.com/paolino/kelgroups/issues/13) for full
+specification including conflict UX.
 
-- `test/TestHelpers.hs`: keypair generation + signing helpers via keri-hs
-- Update all tests to use real CESR keys and valid signatures
-- `test/Generators.hs`: generate valid CESR keys for QuickCheck
+### Remaining steps
 
-### 5. Bootstrap mode
+Steps 3–7 from the keri-bridge gap analysis remain after #13:
 
-- Bootstrap submissions still need passphrase + valid signature
-- First `IntroduceMember` uses a real CESR-encoded key
-
-## Files to modify
-
-| File | Change |
-|---|---|
-| `kelgroups.cabal` | Add `keri-hs` dependency |
-| `lib/KelGroups/Validate.hs` | CESR key validation |
-| `lib/KelGroups/Server/JSON.hs` | Add `subSignature` to Submission |
-| `lib/KelGroups/Server.hs` | Verify signatures on POST |
-| `test/TestHelpers.hs` | Keypair generation + signing |
-| `test/E2ESpec.hs` | Real keys + signatures |
-| `test/MultiClientSpec.hs` | Real keys + signatures |
-| `test/ServerSpec.hs` | Real keys + signatures |
-| `test/Generators.hs` | Valid CESR key generators |
-
-## Verification
-
-```bash
-cd /code/kelgroups-dev
-nix develop --quiet -c bash -c "just format && just ci"
-```
+| Step | Gap | Status |
+|------|-----|--------|
+| 3. SAID for proposals | Gap 3 | Pending |
+| 4. ~~Digest chain~~ | ~~Gap 4~~ | → merged into #13 |
+| 5. Canonical JSON | Gap 5 | Pending |
+| 6. Group inception | Gap 6 | Pending |
+| 7. HTTP session auth | [#8](https://github.com/paolino/kelgroups/issues/8) | Pending |
