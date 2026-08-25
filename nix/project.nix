@@ -62,6 +62,9 @@ let
         esbuild
         nodejs_20
       ];
+      shellHook = ''
+        echo "packages: ${keri-hs}" > cabal.project.local
+      '';
     };
     cabalProjectLocal = ''
       packages: ${keri-hs}
