@@ -9,6 +9,7 @@ module Main (main) where
 import E2ESpec qualified
 import FoldSpec qualified
 import InvariantsSpec qualified
+import JwkSpec qualified
 import MultiClientSpec qualified
 import ServerSpec qualified
 import StoreInvariantsSpec qualified
@@ -23,6 +24,7 @@ main = hspec $ do
     TransitionInvariantsSpec.spec
     FoldSpec.spec
     ValidateSpec.spec
+    JwkSpec.spec
     StoreSpec.spec
     StoreInvariantsSpec.spec
     ServerSpec.spec
