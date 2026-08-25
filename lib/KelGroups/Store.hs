@@ -22,6 +22,7 @@ module KelGroups.Store
     , ChainTip (..)
     , StoredEvent (..)
     , openKEL
+    , openKELWithIdentity
     , closeKEL
     , appendEvent
     , readState
@@ -135,7 +136,37 @@ openKEL
     -- ^ Initial application fold value
     -> FilePath
     -> IO (KELStore a)
-openKEL appFoldFn initial path = do
+openKEL appFoldFn initial path =
+    openKELWith appFoldFn initial path Nothing
+
+{- | Open a fresh KEL with a caller-provided server
+identity instead of generating one. Fails if the store
+already holds an identity or events, so an imported
+key can never silently replace the signer of an
+existing chain.
+-}
+openKELWithIdentity
+    :: (FromJSON a)
+    => AppFold a
+    -> a
+    -- ^ Initial application fold value
+    -> FilePath
+    -> KeyPair
+    -- ^ Server identity to persist
+    -> IO (KELStore a)
+openKELWithIdentity appFoldFn initial path kp =
+    openKELWith appFoldFn initial path (Just kp)
+
+openKELWith
+    :: (FromJSON a)
+    => AppFold a
+    -> a
+    -- ^ Initial application fold value
+    -> FilePath
+    -> Maybe KeyPair
+    -- ^ Optional provided identity (fresh stores only)
+    -> IO (KELStore a)
+openKELWith appFoldFn initial path mProvided = do
     conn <- open path
     execute_
         conn
@@ -170,10 +201,18 @@ openKEL appFoldFn initial path = do
             :: IO [Only Int]
     (kp, cesrKey) <- case identityRows of
         [(skBytes, pkBytes)] ->
-            loadIdentity skBytes pkBytes
+            case mProvided of
+                Just _ ->
+                    fail
+                        "server_identity already exists"
+                Nothing ->
+                    loadIdentity skBytes pkBytes
         []
             | eventCount == 0 ->
-                createIdentity conn
+                maybe
+                    (createIdentity conn)
+                    (persistIdentity conn)
+                    mProvided
         _ ->
             fail
                 "server_identity absent \
@@ -356,6 +395,13 @@ inception event, and persist both to SQLite.
 createIdentity :: Connection -> IO (KeyPair, Text)
 createIdentity conn = do
     kp <- generateKeyPair
+    persistIdentity conn kp
+
+{- | Persist a given server identity and create its L1
+inception event.
+-}
+persistIdentity :: Connection -> KeyPair -> IO (KeyPair, Text)
+persistIdentity conn kp = do
     let pkBytes = publicKeyBytes (publicKey kp)
         skBytes = secretKeyBytes (secretKey kp)
         cesrKey =
