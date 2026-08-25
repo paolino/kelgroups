@@ -41,7 +41,34 @@ let
     '';
   };
   flake = project.flake { };
+  ciShell = (pkgs.haskell-nix.cabalProject' {
+    src = ../.;
+    compiler-nix-name = "ghc984";
+    index-state = indexState;
+    shell = {
+      withHoogle = false;
+      tools = {
+        cabal = { index-state = indexState; };
+        cabal-fmt = { index-state = indexState; };
+        fourmolu = { index-state = indexState; };
+        hlint = { index-state = indexState; };
+      };
+      buildInputs = with pkgs; [
+        just
+        lean4
+        purs
+        spago-unstable
+        purs-tidy-bin.purs-tidy-0_10_0
+        esbuild
+        nodejs_20
+      ];
+    };
+    cabalProjectLocal = ''
+      packages: ${keri-hs}
+    '';
+  }).shell;
 in {
   packages = flake.packages;
   devShells.default = project.shell;
+  devShells.ci = ciShell;
 }
