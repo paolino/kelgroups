@@ -9,6 +9,10 @@ let
       tools = {
         cabal = { index-state = indexState; };
         cabal-fmt = { index-state = indexState; };
+        haskell-language-server = {
+          index-state = indexState;
+        };
+        hoogle = { index-state = indexState; };
         fourmolu = { index-state = indexState; };
         hlint = { index-state = indexState; };
       };
@@ -24,6 +28,9 @@ let
         purs-tidy-bin.purs-tidy-0_10_0
         esbuild
         nodejs_20
+        (writeShellScriptBin "haskell-language-server-wrapper" ''
+          exec haskell-language-server "$@"
+        '')
       ];
       shellHook = ''
         echo "packages: ${keri-hs}" > cabal.project.local
