@@ -1,0 +1,1294 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://paolino.github.io/kelgroups/implementation/">
+      
+      
+        <link rel="prev" href="../design/">
+      
+      
+        <link rel="next" href="../properties/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Implementation - kelgroups</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#kelgroups-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="kelgroups" class="md-header__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            kelgroups
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Implementation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="kelgroups" class="md-nav__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    kelgroups
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nix-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nix Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cabal-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cabal Package
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Library Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-sketch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Sketch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lean-4-proofs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lean 4 Proofs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quickcheck-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QuickCheck Properties
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="QuickCheck Properties">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store-through-dsl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store-through DSL
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#justfile-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Justfile Recipes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../key-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nix-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nix Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cabal-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cabal Package
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Library Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-sketch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type Sketch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lean-4-proofs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lean 4 Proofs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quickcheck-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QuickCheck Properties
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="QuickCheck Properties">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store-through-dsl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store-through DSL
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#justfile-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Justfile Recipes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="kelgroups-implementation-plan">kelgroups — Implementation Plan</h1>
+<h2 id="nix-setup">Nix Setup</h2>
+<ul>
+<li><strong>haskell.nix</strong> with GHC 9.8.4</li>
+<li><a href="https://github.com/paolino/keri-hs">keri-hs</a> as flake input (KERI events, CESR encoding, Ed25519 crypto, KEL primitives)</li>
+<li><a href="https://github.com/paolino/keri-purs">keri-purs</a> as spago git dependency (PureScript KERI events, CESR, Ed25519, KEL replay)</li>
+<li><a href="https://github.com/paolino/keri-lean">keri-lean</a> as lake git dependency (generic KERI types for Lean proofs)</li>
+<li>Dev shell includes: cabal, fourmolu, hlint, hoogle, cabal-fmt, just, lean4, mkdocs, purescript, spago</li>
+</ul>
+<h2 id="cabal-package">Cabal Package</h2>
+<p><strong><code>kelgroups.cabal</code></strong> — library + test suite + executable:</p>
+<ul>
+<li>Library depends on <code>base</code>, <code>containers</code>, <code>text</code>, <code>bytestring</code>, <code>sqlite-simple</code>, <code>stm</code>, <code>aeson</code>, <code>http-types</code>, <code>wai</code>, <code>keri-hs</code></li>
+<li>Executable depends on <code>kelgroups</code>, <code>warp</code>, <code>stm</code>, <code>text</code></li>
+<li>Test suite uses <code>hspec</code> + <code>QuickCheck</code> + <code>temporary</code> + <code>directory</code> + <code>warp</code> + <code>http-client</code> + <code>http-types</code> + <code>aeson</code> + <code>async</code> + <code>stm</code></li>
+</ul>
+<h2 id="library-modules">Library Modules</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KelGroups.Types</code></td>
+<td>Core types: <code>Role</code>, <code>Member</code>, <code>RoleDef</code>, <code>GroupConfig</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.Event</code></td>
+<td><code>GroupEvent a</code>, <code>BaseEvent</code>, <code>Proposal</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.State</code></td>
+<td><code>GroupState a</code>, <code>adminCount</code>, <code>majority</code>, <code>isAdmin</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.Fold</code></td>
+<td>KEL fold: <code>foldGroup</code>, <code>applyEvent</code>, <code>AppFold</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.Validate</code></td>
+<td>Event validation with <code>ValidationError</code> ADT</td>
+</tr>
+<tr>
+<td><code>KelGroups.Bootstrap</code></td>
+<td><code>AuthMode</code> detection (bootstrap vs normal)</td>
+</tr>
+<tr>
+<td><code>KelGroups.Trivial</code></td>
+<td>Trivial instance: <code>a = ()</code>, no app roles</td>
+</tr>
+<tr>
+<td><code>KelGroups.Store</code></td>
+<td>SQLite-backed KEL store with KERI events, digest chain, and server identity</td>
+</tr>
+<tr>
+<td><code>KelGroups.Server</code></td>
+<td>WAI application: routing, KERI event construction, SSE streaming</td>
+</tr>
+<tr>
+<td><code>KelGroups.Server.JSON</code></td>
+<td>Orphan <code>ToJSON</code>/<code>FromJSON</code> instances + HTTP types (<code>Submission</code>, <code>AppendResult</code>, <code>ServerError</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="type-sketch">Type Sketch</h3>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">Role</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Admin</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kt">AppRole</span><span class="w"> </span><span class="kt">RoleName</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">Member</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Member</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">memberKey</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">memberRoles</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Set</span><span class="w"> </span><span class="kt">Role</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">RoleDef</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">RoleDef</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">canAdd</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">canRemove</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="kr">newtype</span><span class="w"> </span><span class="kt">GroupConfig</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">GroupConfig</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">roleDefs</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">RoleName</span><span class="w"> </span><span class="p">(</span><span class="kt">RoleDef</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+</code></pre></div>
+<h3 id="events">Events</h3>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">GroupEvent</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Base</span><span class="w"> </span><span class="kt">BaseEvent</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kt">App</span><span class="w"> </span><span class="n">a</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">BaseEvent</span>
+<span class="w">  </span><span class="ow">=</span><span class="w"> </span><span class="kt">Propose</span><span class="w"> </span><span class="kt">Proposal</span>
+<span class="w">  </span><span class="o">|</span><span class="w"> </span><span class="kt">Approve</span><span class="w"> </span><span class="kt">ProposalId</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">Proposal</span>
+<span class="w">  </span><span class="ow">=</span><span class="w"> </span><span class="kt">IntroduceMember</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="p">(</span><span class="kt">Set</span><span class="w"> </span><span class="kt">Role</span><span class="p">)</span>
+<span class="w">  </span><span class="o">|</span><span class="w"> </span><span class="kt">RemoveMember</span><span class="w"> </span><span class="kt">Text</span>
+<span class="w">  </span><span class="o">|</span><span class="w"> </span><span class="kt">ChangeRoles</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="p">(</span><span class="kt">Set</span><span class="w"> </span><span class="kt">Role</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="state">State</h3>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">GroupState</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">GroupState</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">members</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="kt">Member</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">pendingProposals</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">ProposalId</span><span class="w"> </span><span class="kt">PendingProposal</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">appFold</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="n">a</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">AuthMode</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Bootstrap</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kt">Normal</span>
+
+<span class="nf">authMode</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">GroupState</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">AuthMode</span>
+<span class="nf">authMode</span><span class="w"> </span><span class="n">gs</span>
+<span class="w">  </span><span class="o">|</span><span class="w"> </span><span class="n">adminCount</span><span class="w"> </span><span class="n">gs</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Bootstrap</span>
+<span class="w">  </span><span class="o">|</span><span class="w"> </span><span class="n">otherwise</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Normal</span>
+</code></pre></div>
+<h3 id="fold">Fold</h3>
+<div class="highlight"><pre><span></span><code><span class="nf">foldGroup</span>
+<span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">AppFold</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">[(</span><span class="kt">Text</span><span class="p">,</span><span class="w"> </span><span class="kt">GroupEvent</span><span class="w"> </span><span class="n">a</span><span class="p">)]</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupState</span><span class="w"> </span><span class="n">a</span>
+
+<span class="kr">type</span><span class="w"> </span><span class="kt">AppFold</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">a</span>
+</code></pre></div>
+<h3 id="validation">Validation</h3>
+<div class="highlight"><pre><span></span><code><span class="nf">validateEvent</span>
+<span class="w">  </span><span class="ow">::</span><span class="w"> </span><span class="kt">GroupConfig</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupState</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupEvent</span><span class="w"> </span><span class="n">a</span>
+<span class="w">  </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">ValidationError</span><span class="w"> </span><span class="nb">()</span>
+</code></pre></div>
+<h3 id="store">Store</h3>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">KELStore</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">storeConn</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Connection</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">stateVar</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">TVar</span><span class="w"> </span><span class="p">(</span><span class="kt">GroupState</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">tipVar</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">TVar</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">ChainTip</span><span class="p">)</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">lengthVar</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">TVar</span><span class="w"> </span><span class="kt">Int</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">serverKeyPair</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KeyPair</span><span class="w">       </span><span class="c1">-- Ed25519 server identity</span>
+<span class="w">  </span><span class="p">,</span><span class="w"> </span><span class="n">serverCesrKey</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Text</span><span class="w">          </span><span class="c1">-- CESR-encoded server public key</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">ChainTip</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">ChainTip</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">tipPrefix</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Text</span><span class="p">,</span><span class="w"> </span><span class="n">tipSeqNo</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Int</span><span class="p">,</span><span class="w"> </span><span class="n">tipDigest</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="p">}</span>
+
+<span class="nf">openKEL</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">FromJSON</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=&gt;</span><span class="w"> </span><span class="kt">AppFold</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">FilePath</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+<span class="nf">closeKEL</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="nb">()</span>
+<span class="nf">appendEvent</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">ToJSON</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=&gt;</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">AppFold</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Event</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupEvent</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="nb">()</span>
+<span class="nf">readState</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">GroupState</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+<span class="nf">readEventsFrom</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Int</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">[</span><span class="kt">StoredEvent</span><span class="p">]</span>
+<span class="nf">kelLength</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="kt">Int</span>
+<span class="nf">chainTip</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KELStore</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">ChainTip</span><span class="p">)</span>
+</code></pre></div>
+<p>Events are stored as KERI canonical JSON (via <code>serializeEvent</code> from keri-hs) in SQLite alongside the group event anchor, signer key, signature, and denormalized chain metadata (prefix, sequence number, digest). The in-memory <code>TVar</code> state is updated incrementally on each append.</p>
+<p>On first <code>openKEL</code>, the store generates a server Ed25519 keypair (persisted in a singleton <code>server_identity</code> table) and creates an L1 inception event (event 0) signed by the server key. The group identifier is the inception event's SAID (available as <code>tipPrefix</code> immediately after open). On subsequent opens, the keypair is loaded from the table and all group events are replayed from the <code>group_event</code> column to rebuild in-memory state. The chain tip is recovered from the last row's metadata.</p>
+<h3 id="server">Server</h3>
+<p>HTTP interface via warp + wai with JSON encoding (aeson).</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/condition</code></td>
+<td>GET</td>
+<td>Current group state + auth mode</td>
+</tr>
+<tr>
+<td><code>/events?after=N</code></td>
+<td>GET</td>
+<td>First event after sequence number N</td>
+</tr>
+<tr>
+<td><code>/events</code></td>
+<td>POST</td>
+<td>Submit a <code>Submission</code> (signer + signature + priorDigest + event)</td>
+</tr>
+<tr>
+<td><code>/info</code></td>
+<td>GET</td>
+<td>Public admin emails, pending status, server key, group identifier</td>
+</tr>
+<tr>
+<td><code>/stream</code></td>
+<td>GET</td>
+<td>SSE stream — emits <code>event: new</code> with <code>{"sn":N}</code> on each append</td>
+</tr>
+</tbody>
+</table>
+<p><strong>SSE mechanism:</strong> Each client gets a <code>dupTChan</code> copy of the broadcast channel. Disconnection is handled by warp (thread dies, TChan is GC'd).</p>
+<p><strong>POST flow:</strong> Parse JSON → check auth mode (bootstrap requires passphrase, normal requires member) → construct KERI event (inception for bootstrap, interaction for normal) → verify Ed25519 signature against serialized KERI event → check <code>priorDigest</code> matches current chain tip (stale-tip detection) → validate business event → append to store → broadcast sequence number → respond with <code>AppendResult</code>.</p>
+<p><strong>Error codes:</strong> 400 (bad JSON), 401 (wrong/missing passphrase), 403 (non-member access), 404 (unknown route or no event), 409 (stale tip — another client appended first), 422 (validation error).</p>
+<p><strong>Executable:</strong> <code>kelgroups-server &lt;port&gt; &lt;db-path&gt; &lt;passphrase&gt;</code> — opens a SQLite KEL, creates broadcast channel, runs warp.</p>
+<h2 id="lean-4-proofs">Lean 4 Proofs</h2>
+<p>Generic KERI types (<code>Digest</code>, <code>SAID</code>, <code>Key</code>, <code>KELEvent</code>, <code>KEL</code>, <code>hashChainValid</code>) are imported from <a href="https://github.com/paolino/keri-lean">keri-lean</a>. kelgroups-specific types and all 9 proof files are local.</p>
+<p>Invariants proven in <code>lean/KelGroups/Invariants.lean</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Theorem</th>
+<th>Statement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bootstrap_iff_zero_admins</code></td>
+<td><code>authMode gs = bootstrap ↔ adminCount gs = 0</code></td>
+</tr>
+<tr>
+<td><code>normal_iff_positive_admins</code></td>
+<td><code>authMode gs = normal ↔ adminCount gs ≠ 0</code></td>
+</tr>
+<tr>
+<td><code>empty_is_bootstrap</code></td>
+<td><code>authMode emptyState = bootstrap</code></td>
+</tr>
+<tr>
+<td><code>majority_zero</code> .. <code>majority_three</code></td>
+<td>Concrete majority values</td>
+</tr>
+<tr>
+<td><code>majority_le</code></td>
+<td><code>majority n ≤ n</code></td>
+</tr>
+<tr>
+<td><code>majority_pos</code></td>
+<td><code>n &gt; 0 → majority n &gt; 0</code></td>
+</tr>
+<tr>
+<td><code>remove_all_triggers_bootstrap</code></td>
+<td>Empty members → bootstrap</td>
+</tr>
+<tr>
+<td><code>admin_member_means_normal</code></td>
+<td>Admin in members → normal mode</td>
+</tr>
+</tbody>
+</table>
+<p>Transition invariants proven in <code>lean/KelGroups/TransitionInvariants.lean</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Theorem</th>
+<th>Statement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enact_introduce_admin_exits_bootstrap</code></td>
+<td>Introducing admin → adminCount &gt; 0</td>
+</tr>
+<tr>
+<td><code>enact_introduce_admin_count</code></td>
+<td>Fresh admin key → adminCount increments by 1</td>
+</tr>
+<tr>
+<td><code>enact_introduce_nonadmin_count</code></td>
+<td>Non-admin introduce → adminCount unchanged</td>
+</tr>
+<tr>
+<td><code>enact_preserves_pendingProposals</code></td>
+<td>enact only touches members</td>
+</tr>
+<tr>
+<td><code>enact_remove_preserves_normal</code></td>
+<td>adminCount ≥ 2 and remove → adminCount ≥ 1</td>
+</tr>
+</tbody>
+</table>
+<h2 id="quickcheck-properties">QuickCheck Properties</h2>
+<p>Properties and integration tests organized by layer:</p>
+<table>
+<thead>
+<tr>
+<th>Test module</th>
+<th>Scope</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>InvariantsSpec</code></td>
+<td>Pure state invariants (Lean mirrors)</td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>TransitionInvariantsSpec</code></td>
+<td>Pure transition invariants (Lean mirrors)</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>FoldInvariantsSpec</code></td>
+<td>Fold-level properties (app events, approve, changeRoles)</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>ValidateSpec</code></td>
+<td>Validation rule coverage (bootstrap, membership, roles)</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>StoreSpec</code></td>
+<td>Store mechanics (roundtrip, fold consistency, readEventsFrom, kelLength)</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>StoreInvariantsSpec</code></td>
+<td>Lean invariants through KERI event + SQLite roundtrip</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>ServerSpec</code></td>
+<td>HTTP endpoints, SSE, auth, validation errors</td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>E2ESpec</code></td>
+<td>End-to-end multi-admin governance flows</td>
+<td>14</td>
+</tr>
+<tr>
+<td><code>MultiClientSpec</code></td>
+<td>Concurrent clients, stale-tip rejection, SSE notifications</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Total: 87 tests.</strong></p>
+<h3 id="store-through-dsl">Store-through DSL</h3>
+<p><code>StoreTestDSL</code> provides combinators that mirror Lean quantifier patterns:</p>
+<div class="highlight"><pre><span></span><code><span class="c1">-- Lean: theorem foo (gs : GroupState) : P gs</span>
+<span class="nf">onReachable</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="p">(</span><span class="kt">GroupState</span><span class="w"> </span><span class="nb">()</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Property</span>
+
+<span class="c1">-- Lean: theorem foo (gs : GroupState) (h : Pre gs) : P gs</span>
+<span class="nf">onReachableWhere</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="p">(</span><span class="kt">GroupState</span><span class="w"> </span><span class="nb">()</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">(</span><span class="kt">GroupState</span><span class="w"> </span><span class="nb">()</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Property</span>
+
+<span class="c1">-- Lean: theorem foo (gs) (mid) (roles) : P (f gs mid roles)</span>
+<span class="nf">onReachableWith</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Gen</span><span class="w"> </span><span class="p">[(</span><span class="kt">Text</span><span class="p">,</span><span class="w"> </span><span class="kt">GroupEvent</span><span class="w"> </span><span class="nb">()</span><span class="p">)]</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">(</span><span class="kt">GroupState</span><span class="w"> </span><span class="nb">()</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Gen</span><span class="w"> </span><span class="kt">Bool</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Property</span>
+</code></pre></div>
+<p>The <code>arbitraryHistory</code> generator produces valid event histories by tracking state: bootstrap first, then random proposals from live admins. States are reached through the full store pipeline (KERI event construction → SQLite write → reopen → decode → fold).</p>
+<h2 id="ci">CI</h2>
+<ul>
+<li><strong>Build + Test</strong>: <code>nix develop -c just ci</code> (format, cabal-fmt, lint, build, test, lean, client)</li>
+<li><strong>Docs</strong>: MkDocs deployed to GitHub Pages on push to main</li>
+</ul>
+<h2 id="justfile-recipes">Justfile Recipes</h2>
+<table>
+<thead>
+<tr>
+<th>Recipe</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>build</code></td>
+<td><code>cabal build all -O0</code></td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td><code>cabal test all -O0 --test-show-details=direct</code></td>
+</tr>
+<tr>
+<td><code>format</code></td>
+<td><code>fourmolu -i lib/**/*.hs test/*.hs app/*.hs</code></td>
+</tr>
+<tr>
+<td><code>lint</code></td>
+<td><code>hlint lib/</code></td>
+</tr>
+<tr>
+<td><code>cabal-fmt</code></td>
+<td><code>cabal-fmt -i kelgroups.cabal</code></td>
+</tr>
+<tr>
+<td><code>lean</code></td>
+<td><code>cd lean &amp;&amp; lake build</code></td>
+</tr>
+<tr>
+<td><code>build-client</code></td>
+<td><code>cd client &amp;&amp; npm install &amp;&amp; spago build</code></td>
+</tr>
+<tr>
+<td><code>bundle-client</code></td>
+<td>build + bundle PureScript client</td>
+</tr>
+<tr>
+<td><code>test-client</code></td>
+<td><code>cd client &amp;&amp; spago -x test.dhall test</code></td>
+</tr>
+<tr>
+<td><code>ci</code></td>
+<td>format + cabal-fmt + lint + build + test + lean + client</td>
+</tr>
+<tr>
+<td><code>docs</code></td>
+<td><code>mkdocs build</code></td>
+</tr>
+<tr>
+<td><code>serve</code></td>
+<td><code>cabal run kelgroups-server -O0 -- &lt;port&gt; &lt;db&gt; &lt;pass&gt;</code></td>
+</tr>
+<tr>
+<td><code>clean</code></td>
+<td>cabal clean + lake clean</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mermaid.mjs" type="module"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1157 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://paolino.github.io/kelgroups/properties/">
+      
+      
+        <link rel="prev" href="../implementation/">
+      
+      
+        <link rel="next" href="../key-export/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Properties - kelgroups</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#properties-catalog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="kelgroups" class="md-header__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            kelgroups
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Properties
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="kelgroups" class="md-nav__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    kelgroups
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#static-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transition-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transition Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fold-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fold Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Invariants
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation Invariants">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bootstrap-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normal-mode-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normal mode: authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normal-mode-approval-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normal mode: approval constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qc-only-properties-no-lean-counterpart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QC-only properties (no Lean counterpart)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#store-through-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store-Through Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../key-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#static-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transition-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transition Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fold-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fold Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Invariants
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation Invariants">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bootstrap-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normal-mode-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normal mode: authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normal-mode-approval-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Normal mode: approval constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qc-only-properties-no-lean-counterpart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QC-only properties (no Lean counterpart)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#store-through-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Store-Through Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="properties-catalog">Properties Catalog</h1>
+<p>This page catalogs every proven invariant and QuickCheck property in the
+kelgroups project. Each entry links a Lean theorem to its corresponding
+QuickCheck test, ensuring the Haskell implementation matches the formal
+specification.</p>
+<h2 id="static-invariants">Static Invariants</h2>
+<p>Lean file: <code>KelGroups/Invariants.lean</code> | QC file: <code>InvariantsSpec.hs</code></p>
+<p>These properties hold for any <code>GroupState</code>, independent of how it was
+reached.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Lean theorem</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S1</td>
+<td>Bootstrap mode iff zero admins</td>
+<td><code>bootstrap_iff_zero_admins</code></td>
+<td><code>bootstrap mode implies zero admins</code></td>
+</tr>
+<tr>
+<td>S2</td>
+<td>Normal mode iff positive admins</td>
+<td><code>normal_iff_positive_admins</code></td>
+<td><code>normal mode implies positive admins</code></td>
+</tr>
+<tr>
+<td>S3</td>
+<td>Empty state is bootstrap</td>
+<td><code>empty_is_bootstrap</code></td>
+<td><code>empty state is in bootstrap mode</code></td>
+</tr>
+<tr>
+<td>S4</td>
+<td>majority(0) = 0</td>
+<td><code>majority_zero</code></td>
+<td><code>majority of 0 admins is 0</code></td>
+</tr>
+<tr>
+<td>S5</td>
+<td>majority(1) = 1</td>
+<td><code>majority_one</code></td>
+<td><code>majority of 1 admin is 1</code></td>
+</tr>
+<tr>
+<td>S6</td>
+<td>majority(2) = 1</td>
+<td><code>majority_two</code></td>
+<td><code>majority of 2 admins is 1</code></td>
+</tr>
+<tr>
+<td>S7</td>
+<td>majority(3) = 2</td>
+<td><code>majority_three</code></td>
+<td><code>majority of 3 admins is 2</code></td>
+</tr>
+<tr>
+<td>S8</td>
+<td>majority(n) &lt;= n</td>
+<td><code>majority_le</code></td>
+<td><code>majority n &lt;= n</code></td>
+</tr>
+<tr>
+<td>S9</td>
+<td>majority(n) &gt; 0 when n &gt; 0</td>
+<td><code>majority_pos</code></td>
+<td><code>majority of positive admin count is positive</code></td>
+</tr>
+<tr>
+<td>S10</td>
+<td>Removing all members triggers bootstrap</td>
+<td><code>remove_all_triggers_bootstrap</code></td>
+<td><code>removing all members triggers bootstrap</code></td>
+</tr>
+<tr>
+<td>S11</td>
+<td>State with admin member is normal</td>
+<td><code>admin_member_means_normal</code></td>
+<td><code>state with at least one admin is in normal mode</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="transition-invariants">Transition Invariants</h2>
+<p>Lean file: <code>KelGroups/TransitionInvariants.lean</code> | QC file:
+<code>TransitionInvariantsSpec.hs</code></p>
+<p>These properties describe how transition functions (<code>enact</code>,
+<code>applyPropose</code>, <code>foldGroup</code>) preserve or change state.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Lean theorem</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T1</td>
+<td>Introducing admin makes adminCount &gt; 0</td>
+<td><code>enact_introduce_admin_exits_bootstrap</code></td>
+<td><code>introducing admin makes adminCount &gt; 0</code></td>
+</tr>
+<tr>
+<td>T2</td>
+<td>Introducing admin increases adminCount by 1</td>
+<td><code>enact_introduce_admin_count</code></td>
+<td><code>introducing admin increases adminCount by 1</code></td>
+</tr>
+<tr>
+<td>T3</td>
+<td>Introducing non-admin preserves adminCount</td>
+<td><code>enact_introduce_nonadmin_count</code></td>
+<td><code>introducing non-admin preserves adminCount</code></td>
+</tr>
+<tr>
+<td>T4</td>
+<td>Enact only touches members, not proposals</td>
+<td><code>enact_preserves_pendingProposals</code></td>
+<td><code>enact only touches members</code></td>
+</tr>
+<tr>
+<td>T5</td>
+<td>Folding empty list yields emptyState</td>
+<td><code>foldGroup_nil</code></td>
+<td><code>folding empty list yields emptyState</code></td>
+</tr>
+<tr>
+<td>T6</td>
+<td>Bootstrap proposal is immediately enacted</td>
+<td><code>bootstrap_proposal_immediately_enacted</code></td>
+<td><code>bootstrap proposal has no pending after apply</code></td>
+</tr>
+<tr>
+<td>T7</td>
+<td>Single admin proposal enacted immediately</td>
+<td><code>single_admin_proposal_enacted</code></td>
+<td><code>single admin proposal is enacted immediately</code></td>
+</tr>
+<tr>
+<td>T8</td>
+<td>Removing member with &gt;= 2 admins keeps normal</td>
+<td><code>enact_remove_preserves_normal_if_enough_admins</code></td>
+<td><code>adminCount &gt;= 2 and remove keeps adminCount &gt;= 1</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="fold-invariants">Fold Invariants</h2>
+<p>Lean file: <code>KelGroups/FoldInvariants.lean</code> | QC file: <code>FoldSpec.hs</code></p>
+<p>These properties describe the separation between base and app events in
+the fold, and the effect of individual operations on state shape.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Lean theorem</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>App event preserves members</td>
+<td><code>applyEvent_app_preserves_members</code></td>
+<td><code>app event preserves members</code></td>
+</tr>
+<tr>
+<td>F2</td>
+<td>App event preserves pendingProposals</td>
+<td><code>applyEvent_app_preserves_pendingProposals</code></td>
+<td><code>app event preserves pendingProposals</code></td>
+</tr>
+<tr>
+<td>F3</td>
+<td>Approve of non-existent proposal is identity</td>
+<td><code>applyApprove_nonexistent_is_identity</code></td>
+<td><code>approve nonexistent is identity</code></td>
+</tr>
+<tr>
+<td>F4</td>
+<td>ChangeRoles preserves member count</td>
+<td><code>enact_changeRoles_preserves_member_count</code></td>
+<td><code>changeRoles preserves member count</code></td>
+</tr>
+<tr>
+<td>F5</td>
+<td>IntroduceMember increases member count by 1</td>
+<td><code>enact_introduce_increases_member_count</code></td>
+<td><code>introduce increases member count</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="validation-invariants">Validation Invariants</h2>
+<p>Lean file: <code>KelGroups/ValidateInvariants.lean</code> | QC file:
+<code>ValidateSpec.hs</code></p>
+<p>These properties describe the accept/reject behavior of event
+validation. The Lean formalization covers base-system checks only (no
+<code>GroupConfig</code> role preconditions).</p>
+<h3 id="bootstrap-mode">Bootstrap mode</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Lean theorem</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V1</td>
+<td>IntroduceMember with Admin passes bootstrap</td>
+<td><code>bootstrap_accepts_admin_intro</code></td>
+<td><code>bootstrap accepts admin intro</code></td>
+</tr>
+<tr>
+<td>V2</td>
+<td>IntroduceMember without Admin fails bootstrap</td>
+<td><code>bootstrap_rejects_nonadmin_intro</code></td>
+<td><code>bootstrap rejects non-admin intro</code></td>
+</tr>
+<tr>
+<td>V3</td>
+<td>RemoveMember fails bootstrap</td>
+<td><code>bootstrap_rejects_remove</code></td>
+<td><code>bootstrap rejects remove</code></td>
+</tr>
+<tr>
+<td>V4</td>
+<td>ChangeRoles fails bootstrap</td>
+<td><code>bootstrap_rejects_changeRoles</code></td>
+<td><code>bootstrap rejects changeRoles</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="normal-mode-authentication">Normal mode: authentication</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Lean theorem</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V5</td>
+<td>Non-admin signer rejected for proposals</td>
+<td><code>normal_proposal_requires_admin</code></td>
+<td><code>non-admin proposal rejected</code></td>
+</tr>
+<tr>
+<td>V6</td>
+<td>Existing member key rejected for introduce</td>
+<td><code>normal_introduce_existing_rejected</code></td>
+<td><code>introduce existing rejected</code></td>
+</tr>
+<tr>
+<td>V7</td>
+<td>Non-member key rejected for remove</td>
+<td><code>normal_remove_nonmember_rejected</code></td>
+<td><code>remove nonmember rejected</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="normal-mode-approval-constraints">Normal mode: approval constraints</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Lean theorem</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V8</td>
+<td>Non-existent proposal rejected for approve</td>
+<td><code>normal_approve_missing_rejected</code></td>
+<td><code>approve missing rejected</code></td>
+</tr>
+<tr>
+<td>V9</td>
+<td>Already-approved signer rejected</td>
+<td><code>normal_double_approve_rejected</code></td>
+<td><code>double approve rejected</code></td>
+</tr>
+<tr>
+<td>V10</td>
+<td>Admin with valid proposal accepted</td>
+<td><code>normal_valid_admin_proposal_accepted</code></td>
+<td><code>valid admin proposal accepted</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="qc-only-properties-no-lean-counterpart">QC-only properties (no Lean counterpart)</h3>
+<p>These test Haskell-specific aspects involving <code>GroupConfig</code> or the
+<code>App</code> event branch, which are not formalized in Lean.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>QC test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V11</td>
+<td>Non-member cannot sign proposals</td>
+<td><code>non-member proposal rejected</code></td>
+</tr>
+<tr>
+<td>V12</td>
+<td>Non-member app event rejected</td>
+<td><code>non-member app event rejected</code></td>
+</tr>
+<tr>
+<td>V13</td>
+<td>Member app event accepted</td>
+<td><code>member app event accepted</code></td>
+</tr>
+<tr>
+<td>V14</td>
+<td>Valid approval accepted</td>
+<td><code>valid approval accepted</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="store-through-invariants">Store-Through Invariants</h2>
+<p>QC file: <code>StoreInvariantsSpec.hs</code> (no Lean counterpart)</p>
+<p>These replay the above invariants through the SQLite store (JSON
+serialization round-trip), verifying that serialization does not break
+any invariant.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Property</th>
+<th>Mirrors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ST1</td>
+<td>bootstrap iff zero admins (store)</td>
+<td>S1</td>
+</tr>
+<tr>
+<td>ST2</td>
+<td>normal iff positive admins (store)</td>
+<td>S2</td>
+</tr>
+<tr>
+<td>ST3</td>
+<td>admin member means normal (store)</td>
+<td>S11</td>
+</tr>
+<tr>
+<td>ST4</td>
+<td>enact introduce admin exits bootstrap (store)</td>
+<td>T1</td>
+</tr>
+<tr>
+<td>ST5</td>
+<td>enact introduce admin count (store)</td>
+<td>T2</td>
+</tr>
+<tr>
+<td>ST6</td>
+<td>enact introduce nonadmin count (store)</td>
+<td>T3</td>
+</tr>
+<tr>
+<td>ST7</td>
+<td>enact preserves pendingProposals (store)</td>
+<td>T4</td>
+</tr>
+<tr>
+<td>ST8</td>
+<td>enact remove preserves normal (store)</td>
+<td>T8</td>
+</tr>
+<tr>
+<td>ST9</td>
+<td>bootstrap proposal immediately enacted (store)</td>
+<td>T6</td>
+</tr>
+<tr>
+<td>ST10</td>
+<td>single admin proposal enacted (store)</td>
+<td>T7</td>
+</tr>
+<tr>
+<td>ST11-13</td>
+<td>Store mechanics (roundtrip, fold, length)</td>
+<td>--</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mermaid.mjs" type="module"></script>
+      
+    
+  </body>
+</html>

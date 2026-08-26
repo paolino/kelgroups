@@ -1,0 +1,1319 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://paolino.github.io/kelgroups/design/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../implementation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Design - kelgroups</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#kelgroups-design-document" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="kelgroups" class="md-header__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            kelgroups
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="kelgroups" class="md-nav__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    kelgroups
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-kel-basics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. KEL Basics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-project-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Project Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-two-layers-of-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Two Layers of Semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Roles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-base-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Base Events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-bootstrap-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Bootstrap Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-http-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. HTTP Protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. HTTP Protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design Principles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-retrieval-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Retrieval Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-submission" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Submission
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sse-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSE Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-edge-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Edge Cases
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../key-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-kel-basics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. KEL Basics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-project-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Project Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Invariants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-two-layers-of-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Two Layers of Semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Roles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-base-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Base Events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-bootstrap-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Bootstrap Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-http-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. HTTP Protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. HTTP Protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design Principles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-retrieval-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Retrieval Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#event-submission" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Submission
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sse-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSE Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-edge-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Edge Cases
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="kelgroups-design-document">kelgroups — Design Document</h1>
+<h2 id="1-kel-basics">1. KEL Basics</h2>
+<p>A <strong>Key Event Log (KEL)</strong> is an append-only, hash-chained, signed event log. Each event carries:</p>
+<ul>
+<li>A <strong>sequence number</strong> (monotonically increasing)</li>
+<li>A <strong>digest</strong> of the prior event (hash chain)</li>
+<li>A <strong>signature</strong> from the event author</li>
+</ul>
+<p>The KEL is a pure data structure. Folding it produces the <strong>current condition</strong> of the system — there is no mutable state outside the log. Validation of a new event always runs against the fold of the existing KEL.</p>
+<h2 id="2-project-overview">2. Project Overview</h2>
+<p><code>kelgroups</code> is a <strong>polymorphic Haskell library</strong> for managing groups via a KEL. The library is generic over application event types — the base system provides group infrastructure while applications supply domain-specific semantics.</p>
+<h3 id="packages">Packages</h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Language</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kelgroups</code></td>
+<td>Haskell</td>
+<td>Polymorphic base system library</td>
+</tr>
+<tr>
+<td><code>kelgroups-server</code></td>
+<td>Haskell</td>
+<td>Server parameterized by application plugin</td>
+</tr>
+<tr>
+<td><code>kelgroups-client</code></td>
+<td>PureScript</td>
+<td>Client-side KEL handling, API, and state</td>
+</tr>
+<tr>
+<td><code>kelgroups-trivial</code></td>
+<td>PureScript</td>
+<td>Halogen reference UI</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dependencies">Dependencies</h3>
+<table>
+<thead>
+<tr>
+<th>Dependency</th>
+<th>Language</th>
+<th>Provides</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/paolino/keri-hs">keri-hs</a></td>
+<td>Haskell</td>
+<td>KERI events, CESR encoding, Ed25519 crypto, KEL primitives</td>
+</tr>
+<tr>
+<td><a href="https://github.com/paolino/keri-purs">keri-purs</a></td>
+<td>PureScript</td>
+<td>KERI events, CESR encoding, Ed25519 crypto, KEL replay</td>
+</tr>
+<tr>
+<td><a href="https://github.com/paolino/keri-lean">keri-lean</a></td>
+<td>Lean 4</td>
+<td>Generic KERI types (<code>Digest</code>, <code>SAID</code>, <code>Key</code>, <code>KELEvent</code>, <code>hashChainValid</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The first instance is <strong>trivial</strong>: no application semantics, just the base system operating alone.</p>
+<h2 id="3-invariants">3. Invariants</h2>
+<ul>
+<li><strong>One server = one group.</strong> No multi-tenancy.</li>
+<li><strong>One KEL per group.</strong> The server's KEL is the single source of truth.</li>
+<li><strong>Server condition = KEL fold.</strong> Pure event-sourced — no side state.</li>
+<li><strong>No KEL reconciliation.</strong> Single authoritative KEL, no forking or merging.</li>
+<li><strong>Validate before append.</strong> Every new event is validated against the current KEL fold before being accepted.</li>
+</ul>
+<h2 id="4-two-layers-of-semantics">4. Two Layers of Semantics</h2>
+<p>The KEL carries two kinds of events:</p>
+<ul>
+<li><strong>Base events</strong> — infrastructure-level operations needed for the system to function (member management, role changes, voting).</li>
+<li><strong>Application events</strong> — domain-specific, opaque to the base system.</li>
+</ul>
+<p>The KEL type is <code>KEL a</code> where <code>a</code> is the application event type. The base system never inspects <code>a</code> — it only folds base events to maintain group state.</p>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">Event</span><span class="w"> </span><span class="n">a</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">BaseEvent</span><span class="w"> </span><span class="kt">BaseEvent</span>
+<span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="kt">AppEvent</span><span class="w"> </span><span class="n">a</span>
+</code></pre></div>
+<h2 id="5-roles">5. Roles</h2>
+<p>Two categories of roles exist:</p>
+<ul>
+<li><strong>Admin</strong> — a distinguished base-system role. Admins vote on member and role changes.</li>
+<li><strong>Application roles</strong> — opaque labels from the base system's perspective.</li>
+</ul>
+<p>All role changes (including granting/revoking admin) require <strong>admin majority vote</strong>.</p>
+<p>Application roles are defined at server startup via <strong>role definitions</strong> that include two predicates:</p>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">RoleDef</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">RoleDef</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">canAdd</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KEL</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">canRemove</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">KEL</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></div>
+<p>These predicates gate role assignment and removal based on the current KEL state. The server is parameterized by a map of role definitions:</p>
+<div class="highlight"><pre><span></span><code><span class="kr">type</span><span class="w"> </span><span class="kt">RoleDefs</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">RoleName</span><span class="w"> </span><span class="p">(</span><span class="kt">RoleDef</span><span class="w"> </span><span class="n">a</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="6-base-events">6. Base Events</h2>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Description</th>
+<th>Requirement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Introduce member</strong></td>
+<td>Add a public key with a set of roles (including admin flag)</td>
+<td>Admin majority vote</td>
+</tr>
+<tr>
+<td><strong>Remove member</strong></td>
+<td>Remove a member entirely</td>
+<td>Admin majority vote</td>
+</tr>
+<tr>
+<td><strong>Change roles</strong></td>
+<td>Modify a member's role set</td>
+<td>Admin majority vote</td>
+</tr>
+</tbody>
+</table>
+<p>Each of these operations follows a <strong>proposal + approval</strong> pattern: one admin proposes, then a majority of admins must approve before the event is appended to the KEL.</p>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">BaseEvent</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">Propose</span><span class="w"> </span><span class="kt">Proposal</span>
+<span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="kt">Approve</span><span class="w"> </span><span class="kt">ProposalDigest</span>
+
+<span class="kr">data</span><span class="w"> </span><span class="kt">Proposal</span>
+<span class="w">    </span><span class="ow">=</span><span class="w"> </span><span class="kt">IntroduceMember</span><span class="w"> </span><span class="kt">PublicKey</span><span class="w"> </span><span class="p">(</span><span class="kt">Set</span><span class="w"> </span><span class="kt">Role</span><span class="p">)</span>
+<span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="kt">RemoveMember</span><span class="w"> </span><span class="kt">PublicKey</span>
+<span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="kt">ChangeRoles</span><span class="w"> </span><span class="kt">PublicKey</span><span class="w"> </span><span class="p">(</span><span class="kt">Set</span><span class="w"> </span><span class="kt">Role</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="7-bootstrap-mode">7. Bootstrap Mode</h2>
+<pre class="mermaid"><code>stateDiagram-v2
+    [*] --&gt; ServerInception : openKEL (first start)
+    ServerInception --&gt; Bootstrap : event 0 = server inception
+    Bootstrap --&gt; Normal : first member introduced with admin role
+    Normal --&gt; Normal : events signed by known members
+    Normal --&gt; Bootstrap : zero admins remaining
+    Bootstrap --&gt; Normal : admin introduced via passphrase auth</code></pre>
+<ul>
+<li><strong>Event 0</strong> is always the server's own KERI inception event (Ed25519 keypair generated on first start). The group identifier is the SAID of this event.</li>
+<li><strong>Empty members</strong> or <strong>zero admins</strong> triggers bootstrap mode.</li>
+<li>The server receives a <strong>passphrase via CLI arguments</strong> at startup.</li>
+<li>In bootstrap mode, clients authenticate via <strong>passphrase challenge</strong> instead of signatures.</li>
+<li>The first client event (event 1) <strong>must</strong> introduce a member with the admin role — otherwise it is rejected.</li>
+<li>After the first admin is introduced, the system transitions to <strong>normal mode</strong> (signature-based auth).</li>
+<li>If all admins are removed, bootstrap mode <strong>reactivates</strong> — the passphrase is the permanent fallback. The system is never dead.</li>
+</ul>
+<pre class="mermaid"><code>flowchart TD
+    A[Client connects] --&gt; B{KEL has admins?}
+    B --&gt;|No: bootstrap mode| C[Passphrase challenge]
+    B --&gt;|Yes: normal mode| D[Signature verification]
+    C --&gt; E{Event = Introduce member with admin?}
+    E --&gt;|Yes| F[Append to KEL, transition to normal]
+    E --&gt;|No| G[Reject]
+    D --&gt; H{Valid signature from known member?}
+    H --&gt;|Yes| I[Validate event against KEL fold]
+    H --&gt;|No| J[Reject]
+    I --&gt;|Valid| K[Append to KEL]
+    I --&gt;|Invalid| L[Reject]</code></pre>
+<h2 id="8-authentication">8. Authentication</h2>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Mechanism</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bootstrap</td>
+<td>Passphrase challenge</td>
+<td>KEL has zero admins</td>
+</tr>
+<tr>
+<td>Normal</td>
+<td>Event signed by known member</td>
+<td>KEL has at least one admin</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Majority calculation</strong> for admin votes: <code>ceil(numAdmins / 2)</code>. With a single admin, that admin decides alone.</p>
+<h2 id="9-architecture">9. Architecture</h2>
+<pre class="mermaid"><code>flowchart TB
+    subgraph Haskell
+        LIB["kelgroups (library)&lt;br/&gt;KEL a, Event a&lt;br/&gt;fold, validate&lt;br/&gt;base event logic&lt;br/&gt;role predicates"]
+
+        SRV["kelgroups-server&lt;br/&gt;HTTP API&lt;br/&gt;bootstrap auth&lt;br/&gt;parameterized by&lt;br/&gt;RoleDefs a, app event type a"]
+
+        KERIHS["keri-hs&lt;br/&gt;KERI events, CESR&lt;br/&gt;Ed25519, KEL primitives"]
+    end
+
+    subgraph PureScript
+        PSLIB["kelgroups-client&lt;br/&gt;API, codec, fold&lt;br/&gt;state management"]
+
+        APP["kelgroups-trivial&lt;br/&gt;Halogen reference UI"]
+
+        KERIPURS["keri-purs&lt;br/&gt;KERI events, CESR&lt;br/&gt;Ed25519, KEL replay"]
+    end
+
+    subgraph Lean4
+        KERILEAN["keri-lean&lt;br/&gt;Digest, SAID, Key&lt;br/&gt;KELEvent, hashChainValid"]
+
+        PROOFS["kelgroups proofs&lt;br/&gt;9 files: invariants&lt;br/&gt;validation, transitions"]
+    end
+
+    SRV --&gt; LIB
+    LIB --&gt; KERIHS
+    APP --&gt; PSLIB
+    PSLIB --&gt; KERIPURS
+    PROOFS --&gt; KERILEAN
+    APP &lt;--&gt;|HTTP + SSE| SRV</code></pre>
+<p>The server is assembled by supplying an <strong>application plugin</strong>:</p>
+<div class="highlight"><pre><span></span><code><span class="kr">data</span><span class="w"> </span><span class="kt">AppPlugin</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">=</span><span class="w"> </span><span class="kt">AppPlugin</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">roleDefs</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">RoleDefs</span><span class="w"> </span><span class="n">a</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">decodeAppEvent</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">ByteString</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="n">a</span>
+<span class="w">    </span><span class="p">,</span><span class="w"> </span><span class="n">encodeAppEvent</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">ByteString</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="nf">runServer</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">AppPlugin</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Passphrase</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="nb">()</span>
+</code></pre></div>
+<p>For the trivial first instance, <code>a = Void</code> (no application events, no application roles).</p>
+<h2 id="10-http-protocol">10. HTTP Protocol</h2>
+<p>The server exposes a minimal HTTP API. No WebSockets — clients use <strong>SSE</strong> for notifications and <strong>HTTP GET</strong> for fetching events.</p>
+<h3 id="design-principles">Design Principles</h3>
+<ul>
+<li><strong>SSE is notification-only</strong> — carries no event payload, just a signal that new events exist</li>
+<li><strong>Clients pull events</strong> — each client tracks its own position in the KEL and requests the next event</li>
+<li><strong>One event per request</strong> — <code>GET</code> returns exactly the next event after the client's last known sequence number</li>
+<li><strong>POST to submit</strong> — clients submit new events (signed or passphrase-authenticated)</li>
+</ul>
+<h3 id="endpoints">Endpoints</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/events?after=N</code></td>
+<td>Returns event at sequence number N+1. 404 if no such event yet.</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/events</code></td>
+<td>Submit a new signed event. Server validates and appends to KEL.</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/stream</code></td>
+<td>SSE endpoint — sends empty notifications when new events are appended.</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/condition</code></td>
+<td>Returns the current group condition (KEL fold result).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="event-retrieval-flow">Event Retrieval Flow</h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    C-&gt;&gt;S: GET /stream (SSE)
+    Note over C: Listening for notifications
+
+    C-&gt;&gt;S: GET /events?after=-1
+    S--&gt;&gt;C: Event 0 (inception)
+
+    C-&gt;&gt;S: GET /events?after=0
+    S--&gt;&gt;C: Event 1
+
+    C-&gt;&gt;S: GET /events?after=1
+    S--&gt;&gt;C: 404 (no more events)
+
+    Note over S: Another client submits event 2
+    S--&gt;&gt;C: SSE: "new"
+
+    C-&gt;&gt;S: GET /events?after=1
+    S--&gt;&gt;C: Event 2</code></pre>
+<h3 id="event-submission">Event Submission</h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant C as Client
+    participant S as Server
+
+    alt Bootstrap mode
+        C-&gt;&gt;S: POST /events {passphrase, event}
+        S-&gt;&gt;S: Verify passphrase
+    else Normal mode
+        C-&gt;&gt;S: POST /events {signature, event}
+        S-&gt;&gt;S: Verify signature
+    end
+
+    S-&gt;&gt;S: Validate event against KEL fold
+    S-&gt;&gt;S: Append to KEL
+
+    S--&gt;&gt;C: 200 OK {sequenceNumber}
+    S--&gt;&gt;S: Notify all SSE listeners</code></pre>
+<h3 id="sse-format">SSE Format</h3>
+<p>The SSE stream sends minimal notifications:</p>
+<div class="highlight"><pre><span></span><code>event: new
+data: {"sn": 5}
+
+event: new
+data: {"sn": 6}
+</code></pre></div>
+<p>The <code>sn</code> field tells the client which sequence number is now available, so it can decide whether to fetch.</p>
+<h2 id="11-edge-cases">11. Edge Cases</h2>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Last admin removed</td>
+<td>Zero admins — bootstrap mode reactivates, passphrase auth required</td>
+</tr>
+<tr>
+<td>Bootstrap: introduce member without admin</td>
+<td>Rejected — first event must grant admin</td>
+</tr>
+<tr>
+<td>App role removal blocked by precondition</td>
+<td><code>canRemove</code> returns <code>False</code> — role change rejected</td>
+</tr>
+<tr>
+<td>Proposal with no approvals</td>
+<td>Stays pending until majority reached or superseded</td>
+</tr>
+<tr>
+<td>Member signs event after removal</td>
+<td>Signature valid but member unknown in current fold — rejected</td>
+</tr>
+<tr>
+<td>Concurrent proposals for same member</td>
+<td>Each proposal is independent, both need majority, applied in KEL order</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mermaid.mjs" type="module"></script>
+      
+    
+  </body>
+</html>
