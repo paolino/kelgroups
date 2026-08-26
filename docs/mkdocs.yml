@@ -27,4 +27,5 @@ nav:
   - Design: design.md
   - Implementation: implementation.md
   - Properties: properties.md
+  - Key Export: key-export.md
   - Roadmap: roadmap.md
