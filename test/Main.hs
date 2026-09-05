@@ -11,6 +11,7 @@ import FoldSpec qualified
 import InvariantsSpec qualified
 import JwkSpec qualified
 import MultiClientSpec qualified
+import S28AppApiSpec qualified
 import ServerSpec qualified
 import StoreInvariantsSpec qualified
 import StoreSpec qualified
@@ -30,3 +31,4 @@ main = hspec $ do
     ServerSpec.spec
     E2ESpec.spec
     MultiClientSpec.spec
+    S28AppApiSpec.spec

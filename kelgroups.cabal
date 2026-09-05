@@ -90,6 +90,8 @@ test-suite invariants
     InvariantsSpec
     JwkSpec
     MultiClientSpec
+    S28AppApiSpec
+    S28DemoApp
     ServerSpec
     StoreInvariantsSpec
     StoreSpec
