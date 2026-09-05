@@ -29,6 +29,7 @@ import KelGroups.Fold
     , IntegratedResult (..)
     , applyIntegratedEvent
     , commitBaseChange
+    , enactMutation
     , foldIntegrated
     , foldIntegratedFrom
     , tryEnactBase
@@ -209,6 +210,39 @@ spec = do
             rows <- readEventsFrom store 1
             length rows `shouldBe` 1
             closeKEL store
+        it "two appends conserve state, rows, length and replay" $ do
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
+            first <-
+                appendIntegratedEvent
+                    store
+                    demoIntegration
+                    "admin-key-1"
+                    (Evt.IEApp (DemoAdd 1))
+            second <-
+                appendIntegratedEvent
+                    store
+                    demoIntegration
+                    "admin-key-1"
+                    (Evt.IEApp (DemoAdd 2))
+            case (first, second) of
+                (Right _, Right _) -> pure ()
+                other ->
+                    expectationFailure
+                        ("expected both appends ok: " <> show other)
+            live <- readState store
+            demoCounter (appFold live) `shouldBe` 3
+            n <- kelLength store
+            n `shouldBe` 2
+            rows <- readEventsFrom store 1
+            length rows `shouldBe` 2
+            let decoded =
+                    mapMaybe
+                        (\se -> (seSigner se,) <$> decodeStrict (seEventBytes se))
+                        rows
+            length decoded `shouldBe` 2
+            foldIntegratedFrom demoIntegration foundingDemo decoded
+                `shouldBe` live
+            closeKEL store
         it "domain-invalid add never appends a byte" $ do
             withTempIntegrated $ \path -> do
                 store <- openIntegratedKEL demoIntegration foundingDemo path
@@ -359,9 +393,39 @@ spec = do
         prop "voted mutations never insert members" $ do
             forAll genDemoProposal $ \proposal' ->
                 let mutation = demoProposalMutation proposal'
-                in  case mutation of
-                        RemoveMemberVoted _ -> True
-                        ChangeRolesVoted _ _ -> True
+                    gs = gsWithAdmin "admin-key-1"
+                    post = enactMutation gs mutation
+                    preKeys = Map.keysSet (members gs)
+                    postKeys = Map.keysSet (members post)
+                in  postKeys `Set.isSubsetOf` preKeys
+        it "voted change-roles never inserts absent members" $ do
+            let gs = gsWithAdmin "admin-key-1"
+            let post =
+                    enactMutation
+                        gs
+                        (ChangeRolesVoted "absent-witness-9" Set.empty)
+            Map.keysSet (members post)
+                `shouldBe` Map.keysSet (members gs)
+            lookupMemberInView "absent-witness-9" (groupView post)
+                `shouldBe` Nothing
+        it "voted change-roles keeps present member keys" $ do
+            let gs = gsWithAdmin "admin-key-1"
+            let post =
+                    enactMutation
+                        gs
+                        (ChangeRolesVoted "admin-key-1" Set.empty)
+            Map.keysSet (members post)
+                `shouldBe` Map.keysSet (members gs)
+            isMemberInView "admin-key-1" (groupView post)
+                `shouldBe` True
+        it "voted remove never inserts absent members" $ do
+            let gs = gsWithAdmin "admin-key-1"
+            let post =
+                    enactMutation gs (RemoveMemberVoted "absent-witness-9")
+            Map.keysSet (members post)
+                `shouldBe` Map.keysSet (members gs)
+            lookupMemberInView "absent-witness-9" (groupView post)
+                `shouldBe` Nothing
         it "nonempty pendingBase roundtrips through JSON" $ do
             let pending =
                     PendingBase

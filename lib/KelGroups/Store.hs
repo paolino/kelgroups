@@ -33,6 +33,7 @@ module KelGroups.Store
     , chainTip
     ) where
 
+import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Concurrent.STM
     ( TVar
     , atomically
@@ -41,6 +42,7 @@ import Control.Concurrent.STM
     , readTVarIO
     , writeTVar
     )
+import Control.Exception (evaluate)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
@@ -132,6 +134,8 @@ data KELStore a = KELStore
     -- ^ Server Ed25519 identity (for signing)
     , serverCesrKey :: Text
     -- ^ CESR-encoded server public key
+    , storeAppendLock :: MVar ()
+    -- ^ Serializes integrated appends (F1 repair)
     }
 
 {- | Open or create a KEL at the given file path.
@@ -268,6 +272,7 @@ openKELWith appFoldFn initial path mProvided = do
             conn
             "SELECT COUNT(*) FROM events"
     lVar <- newTVarIO (n :: Int)
+    appendLock <- newMVar ()
     pure
         KELStore
             { storeConn = conn
@@ -276,6 +281,7 @@ openKELWith appFoldFn initial path mProvided = do
             , lengthVar = lVar
             , serverKeyPair = kp
             , serverCesrKey = cesrKey
+            , storeAppendLock = appendLock
             }
 
 -- | Close the KEL store.
@@ -578,6 +584,7 @@ openIntegratedKEL integration founding path = do
     stVar <- newTVarIO gs
     tVar <- newTVarIO Nothing
     lVar <- newTVarIO eventCount
+    appendLock <- newMVar ()
     pure
         KELStore
             { storeConn = conn
@@ -586,12 +593,21 @@ openIntegratedKEL integration founding path = do
             , lengthVar = lVar
             , serverKeyPair = kp
             , serverCesrKey = cesrKey
+            , storeAppendLock = appendLock
             }
 
 {- | Validate-then-append on the integrated boundary. Runs
 'applyIntegratedEvent' first: on refusal persists NOTHING and touches NO
 in-memory state; on success inserts the SQL row then updates the hot
 state, tip length included.
+
+Concurrency (F1 repair): appends hold 'storeAppendLock' from the state
+read through the TVar commit, so overlapping accepted callers conserve
+every committed transition and event count. The payload encode is forced
+before the lock: its 'ToJSON' rendering is pure in production but carries
+the auditor's test-only serialization rendezvous, which must complete
+before either caller blocks on the lock. A SQL failure still propagates
+to the caller with hot state untouched.
 -}
 appendIntegratedEvent
     :: (ToJSON e, ToJSON bp)
@@ -601,29 +617,31 @@ appendIntegratedEvent
     -> IntegratedEvent bp e
     -> IO (Either (IntegratedError err) (IntegratedResult s))
 appendIntegratedEvent store integration signer event = do
-    gs <- readState store
-    case applyIntegratedEvent integration gs signer event of
-        Left err -> pure (Left err)
-        Right result -> do
-            let payloadJson = encode event
-                payloadText = TE.decodeUtf8 (LBS.toStrict payloadJson)
-                noEnvelope = T.empty
-            n <- kelLength store
-            execute
-                (storeConn store)
-                "INSERT INTO events \
-                \(signer, event_bytes, signature, \
-                \group_event, prefix, seq_no, digest) \
-                \VALUES (?, ?, ?, ?, ?, ?, ?)"
-                ( signer
-                , payloadText
-                , noEnvelope
-                , payloadJson
-                , noEnvelope
-                , n + 1
-                , noEnvelope
-                )
-            atomically $ do
-                writeTVar (stateVar store) (irState result)
-                writeTVar (lengthVar store) (n + 1)
-            pure (Right result)
+    let payloadJson = encode event
+        payloadText = TE.decodeUtf8 (LBS.toStrict payloadJson)
+        noEnvelope = T.empty
+    _ <- evaluate payloadText
+    withMVar (storeAppendLock store) $ \() -> do
+        gs <- readState store
+        case applyIntegratedEvent integration gs signer event of
+            Left err -> pure (Left err)
+            Right result -> do
+                n <- kelLength store
+                execute
+                    (storeConn store)
+                    "INSERT INTO events \
+                    \(signer, event_bytes, signature, \
+                    \group_event, prefix, seq_no, digest) \
+                    \VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    ( signer
+                    , payloadText
+                    , noEnvelope
+                    , payloadJson
+                    , noEnvelope
+                    , n + 1
+                    , noEnvelope
+                    )
+                atomically $ do
+                    writeTVar (stateVar store) (irState result)
+                    writeTVar (lengthVar store) (n + 1)
+                pure (Right result)
