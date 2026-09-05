@@ -25,17 +25,20 @@ module S28DemoApp
     , demoBaseHook
     , demoIntegration
     , demoInitialState
+    , foundingDemo
     , demoStep
     ) where
 
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Map.Strict qualified as Map
 import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import GHC.Generics (Generic)
 import KelGroups.Event
     ( BaseChange (..)
     , BaseMutation (..)
-    , IntegratedEvent (..)
+    , IntegratedEvent
     )
 import KelGroups.Fold
     ( BaseHook
@@ -45,10 +48,13 @@ import KelGroups.Fold
     , Integration (..)
     , applyIntegratedEvent
     )
-import KelGroups.State (GroupState, emptyState)
+import KelGroups.Server.JSON ()
+import KelGroups.State (GroupState (..), emptyState)
 import KelGroups.Types
-    ( ProposalId
-    , Role
+    ( Admin (..)
+    , Member (..)
+    , ProposalId
+    , Role (..)
     , isAdminInView
     )
 
@@ -80,8 +86,8 @@ data DemoProposal
 
 demoProposalMutation :: DemoProposal -> BaseMutation
 demoProposalMutation = \case
-    DemoRemove key -> RemoveMember key
-    DemoChangeRoles key roles -> ChangeRoles key roles
+    DemoRemove key -> RemoveMemberVoted key
+    DemoChangeRoles key roles -> ChangeRolesVoted key roles
 
 demoDigest :: DemoProposal -> ProposalId
 demoDigest proposal' = pack (show proposal')
@@ -154,6 +160,23 @@ demoIntegration =
 
 demoInitialState :: GroupState DemoState
 demoInitialState = emptyState (DemoState 0 [])
+
+foundingDemo :: GroupState DemoState
+foundingDemo =
+    GroupState
+        { members =
+            Map.singleton "admin-key-1" (foundingAdmin "admin-key-1")
+        , pendingProposals = Map.empty
+        , pendingBase = Map.empty
+        , appFold = DemoState 0 []
+        }
+  where
+    foundingAdmin key =
+        Member
+            { memberKey = key
+            , memberEmail = key <> "@test.example"
+            , memberRoles = Set.singleton (AdminRole PublicAdmin)
+            }
 
 demoStep
     :: GroupState DemoState

@@ -10,30 +10,41 @@ domain-invalid events.
 -}
 module S28AppApiSpec (spec) where
 
+import Data.Aeson (decode, decodeStrict, encode)
+import Data.ByteString qualified as BS
+import Data.Either (isRight)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (mapMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import KelGroups.Event
     ( BaseChange (..)
     , BaseMutation (..)
     , DirectCommand (..)
-    , IntegratedEvent (..)
+    , IntegratedEvent
     )
+import KelGroups.Event qualified as Evt
 import KelGroups.Fold
     ( IntegratedError (..)
     , IntegratedResult (..)
     , applyIntegratedEvent
     , commitBaseChange
     , foldIntegrated
+    , foldIntegratedFrom
     , tryEnactBase
     )
+import KelGroups.Server.JSON ()
 import KelGroups.State
     ( GroupState (..)
+    , PendingBase (..)
+    , emptyState
     , groupView
     , lookupPendingBase
     )
 import KelGroups.Store
-    ( appendIntegratedEvent
+    ( StoredEvent (..)
+    , appendIntegratedEvent
+    , closeKEL
     , kelLength
     , openIntegratedKEL
     , readEventsFrom
@@ -63,8 +74,11 @@ import S28DemoApp
     , demoIntegration
     , demoProposalMutation
     , demoReserved
+    , foundingDemo
     , protectedKey
     )
+import System.Directory (removeFile)
+import System.IO.Temp (emptySystemTempFile)
 import Test.Hspec
     ( Spec
     , describe
@@ -98,41 +112,48 @@ gsWithAdmin adminKey =
         { members = Map.singleton adminKey (adminMember adminKey)
         }
 
-gsWithTwoAdmins :: Text -> Text -> GroupState DemoState
-gsWithTwoAdmins adminA adminB =
-    demoInitialState
-        { members =
-            Map.fromList
-                [ (adminA, adminMember adminA)
-                , (adminB, adminMember adminB)
-                ]
-        }
-
-genDemoCounter :: Gen Int
-genDemoCounter = chooseInt (-5, 20)
-
-genDemoEvent :: Gen DemoEvent
-genDemoEvent = do
-    n <- chooseInt (-3, 10)
-    elements [DemoAdd n, DemoReset, DemoNoop]
-
-genDemoEventIncludingInvalid :: Gen DemoEvent
-genDemoEventIncludingInvalid = do
-    n <- chooseInt (-10, 10)
-    elements [DemoAdd n, DemoAdd (-1), DemoReset, DemoNoop]
-
-genMemberKey :: Gen Text
-genMemberKey = elements ["admin-key-1", "member-key-2", "outsider-key-9"]
+withTempIntegrated :: (FilePath -> IO a) -> IO a
+withTempIntegrated action = do
+    path <- emptySystemTempFile "s28-test-.db"
+    result <- action path
+    removeFile path
+    pure result
 
 genDemoProposal :: Gen DemoProposal
 genDemoProposal = do
-    key <- genMemberKey
+    key <- elements ["admin-key-1", "member-key-2", "outsider-key-9"]
     elements [DemoRemove key, DemoChangeRoles key Set.empty]
+
+genTrace :: Gen [(Text, IntegratedEvent DemoProposal DemoEvent)]
+genTrace = listOf genSigned
+  where
+    genSigned = do
+        signer <- elements ["admin-key-1", "outsider-key-9"]
+        evt <- genMixed
+        pure (signer, evt)
+    genMixed = do
+        n <- chooseInt (-5, 10)
+        elements
+            [ Evt.IEApp (DemoAdd n)
+            , Evt.IEApp (DemoAdd (-3))
+            , Evt.IEApp DemoReset
+            , Evt.IEApp DemoNoop
+            , Evt.IEDirect (AdmitMember "fresh-key" "f@x" Set.empty)
+            ]
+
+applyStep
+    :: GroupState DemoState
+    -> (Text, IntegratedEvent DemoProposal DemoEvent)
+    -> GroupState DemoState
+applyStep gs (signer, evt) =
+    case applyIntegratedEvent demoIntegration gs signer evt of
+        Right result -> irState result
+        Left _ -> gs
 
 spec :: Spec
 spec = do
     describe "S28-1 distinct types + signer + GroupView" $ do
-        it "member DemoAdd authorizes by signer through the sole GroupView" $ do
+        it "member add authorizes through the sole view" $ do
             let gs = gsWithAdmin "admin-key-1"
             let view = groupView gs
             lookupMemberInView "admin-key-1" view `shouldSatisfy` (/= Nothing)
@@ -142,82 +163,98 @@ spec = do
                 demoIntegration
                 gs
                 "admin-key-1"
-                (IEApp (DemoAdd 3)) of
+                (Evt.IEApp (DemoAdd 3)) of
                 Right result -> demoCounter (appFold (irState result)) `shouldBe` 3
-                Left err -> expectationFailure ("expected DemoAdd to succeed: " <> show err)
-        it "non-member IEApp is refused with NotAMember before any fold" $ do
+                Left err -> expectationFailure ("expected DemoAdd ok: " <> show err)
+        it "nonmember app refused before any fold" $ do
             let gs = gsWithAdmin "admin-key-1"
             case applyIntegratedEvent
                 demoIntegration
                 gs
                 "outsider-key-9"
-                (IEApp (DemoAdd 1)) of
+                (Evt.IEApp (DemoAdd 1)) of
                 Left (IEValidation (NotAMember _)) -> pure ()
-                other -> expectationFailure ("expected NotAMember refusal: " <> show other)
-        prop "DemoReset from non-admin never advances the counter" $ do
-            forAll genMemberKey $ \outsider ->
-                let gs = gsWithAdmin "admin-key-1"
-                in  case applyIntegratedEvent demoIntegration gs outsider (IEApp DemoReset) of
+                other -> expectationFailure ("expected NotAMember: " <> show other)
+        prop "nonadmin reset never advances the counter" $ do
+            forAll (elements ["member-key-2", "outsider-key-9"]) $ \outsider ->
+                let gs =
+                        (gsWithAdmin "admin-key-1")
+                            { members =
+                                Map.insert
+                                    "member-key-2"
+                                    (plainMember "member-key-2")
+                                    (members (gsWithAdmin "admin-key-1"))
+                            }
+                in  case applyIntegratedEvent demoIntegration gs outsider (Evt.IEApp DemoReset) of
                         Left (IEValidation (NotAMember _)) -> True
                         Left (IEApp (DemoNotAdmin _)) -> True
-                        other -> error ("unexpected Reset outcome: " <> show other)
+                        _ -> False
     describe "S28-1 rejecting step before append" $ do
-        it "accepted IEApp event is durable after appendIntegratedEvent" $ do
-            store <- openIntegratedKEL demoIntegration (DemoState 0 []) ":memory:"
-            gs0 <- readState store
-            let adminKey = "admin-key-1"
-            let gs1 = gs0{members = Map.singleton adminKey (adminMember adminKey)}
-            _ <- pure gs1
+        it "accepted events persist with readable rows" $ do
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
             n0 <- kelLength store
             result <-
                 appendIntegratedEvent
                     store
                     demoIntegration
-                    adminKey
-                    (IEApp (DemoAdd 2))
+                    "admin-key-1"
+                    (Evt.IEApp (DemoAdd 2))
             case result of
                 Right _ -> pure ()
-                Left err -> expectationFailure ("expected append to succeed: " <> show err)
+                Left err -> expectationFailure ("expected append ok: " <> show err)
             n1 <- kelLength store
             (n1 == n0 + 1) `shouldBe` True
-        it "domain-invalid DemoAdd negative is refused and never appended" $ do
-            store <- openIntegratedKEL demoIntegration (DemoState 0 []) ":memory:"
-            n0 <- kelLength store
-            gs0 <- readState store
-            let adminKey = "admin-key-1"
-            let _ = gs0{members = Map.singleton adminKey (adminMember adminKey)}
-            result <-
-                appendIntegratedEvent
-                    store
-                    demoIntegration
-                    adminKey
-                    (IEApp (DemoAdd (-1)))
-            case result of
-                Left (IEApp (DemoNegative _)) -> pure ()
-                other ->
-                    expectationFailure ("expected DemoNegative refusal: " <> show other)
-            n1 <- kelLength store
-            n1 `shouldBe` n0
-        it "non-member append is refused and persists nothing byte-identical" $ do
-            store <- openIntegratedKEL demoIntegration (DemoState 0 []) ":memory:"
-            n0 <- kelLength store
-            gs0 <- readState store
-            result <-
-                appendIntegratedEvent
-                    store
-                    demoIntegration
-                    "outsider-key-9"
-                    (IEApp (DemoAdd 1))
-            case result of
-                Left (IEValidation (NotAMember _)) -> pure ()
-                other -> expectationFailure ("expected NotAMember refusal: " <> show other)
-            n1 <- kelLength store
-            n1 `shouldBe` n0
-            gs1 <- readState store
-            gs1 `shouldBe` gs0
+            live <- readState store
+            demoCounter (appFold live) `shouldBe` 2
+            rows <- readEventsFrom store 1
+            length rows `shouldBe` 1
+            closeKEL store
+        it "domain-invalid add never appends a byte" $ do
+            withTempIntegrated $ \path -> do
+                store <- openIntegratedKEL demoIntegration foundingDemo path
+                gs0 <- readState store
+                n0 <- kelLength store
+                bytes0 <- BS.readFile path
+                result <-
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "admin-key-1"
+                        (Evt.IEApp (DemoAdd (-1)))
+                case result of
+                    Left (IEApp (DemoNegative _)) -> pure ()
+                    other -> expectationFailure ("expected DemoNegative: " <> show other)
+                gs1 <- readState store
+                gs1 `shouldBe` gs0
+                n1 <- kelLength store
+                n1 `shouldBe` n0
+                bytes1 <- BS.readFile path
+                bytes1 `shouldBe` bytes0
+                closeKEL store
+        it "nonmember append persists nothing byte-identical" $ do
+            withTempIntegrated $ \path -> do
+                store <- openIntegratedKEL demoIntegration foundingDemo path
+                gs0 <- readState store
+                n0 <- kelLength store
+                bytes0 <- BS.readFile path
+                result <-
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "outsider-key-9"
+                        (Evt.IEApp (DemoAdd 1))
+                case result of
+                    Left (IEValidation (NotAMember _)) -> pure ()
+                    other -> expectationFailure ("expected NotAMember: " <> show other)
+                gs1 <- readState store
+                gs1 `shouldBe` gs0
+                n1 <- kelLength store
+                n1 `shouldBe` n0
+                bytes1 <- BS.readFile path
+                bytes1 `shouldBe` bytes0
+                closeKEL store
     describe "S28-1 atomic hook" $ do
-        it
-            "base change with succeeding hook commits state and reports MemberAdmitted evidence" $ do
+        it "succeeding hook commits with admitted evidence" $ do
             let gs = gsWithAdmin "admin-key-1"
             let pre = gs
             let post =
@@ -231,46 +268,62 @@ spec = do
                 post
                 (MemberAdmitted "member-key-2") of
                 Right result -> irChange result `shouldBe` Just (MemberAdmitted "member-key-2")
-                Left err -> expectationFailure ("expected hook success: " <> show err)
-        it
-            "failing hook on MemberRemoved protectedKey rejects the whole transition" $ do
+                Left err -> expectationFailure ("expected hook ok: " <> show err)
+        it "hook refusal rejects the whole transition" $ do
+            let base = gsWithAdmin "admin-key-1"
             let gs =
-                    (gsWithAdmin "admin-key-1")
+                    base
                         { members =
-                            Map.insert
-                                protectedKey
-                                (plainMember protectedKey)
-                                (members (gsWithAdmin "admin-key-1"))
+                            Map.insert protectedKey (plainMember protectedKey) (members base)
                         }
             let pre = gs
             let post = gs{members = Map.delete protectedKey (members gs)}
             case commitBaseChange demoIntegration pre post (MemberRemoved protectedKey) of
                 Left (IEApp (DemoHookRefused _)) -> pure ()
                 other -> expectationFailure ("expected DemoHookRefused: " <> show other)
-        it
-            "tentative base change with failing hook restores pre-state and pre-log" $ do
-            store <- openIntegratedKEL demoIntegration (DemoState 0 []) ":memory:"
-            gs0 <- readState store
-            n0 <- kelLength store
-            let adminKey = "admin-key-1"
-            _ <-
-                appendIntegratedEvent
-                    store
-                    demoIntegration
-                    adminKey
-                    (IEDirect (AdmitMember protectedKey (protectedKey <> "@x") Set.empty))
-            result <-
-                appendIntegratedEvent
-                    store
-                    demoIntegration
-                    adminKey
-                    (IEPropose (DemoRemove protectedKey))
-            case result of
-                Left _ -> pure ()
-                Right _ -> pure ()
-            gs1 <- readState store
-            _ <- pure (gs0, gs1, n0)
-            pure ()
+        it "failing hook restores prestate plus prelog" $ do
+            withTempIntegrated $ \path -> do
+                let founding =
+                        foundingDemo
+                            { members =
+                                Map.insert
+                                    protectedKey
+                                    (plainMember protectedKey)
+                                    (members foundingDemo)
+                            }
+                store <- openIntegratedKEL demoIntegration founding path
+                baseline <-
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "admin-key-1"
+                        (Evt.IEApp (DemoAdd 5))
+                case baseline of
+                    Right _ -> pure ()
+                    Left err -> expectationFailure ("baseline append ok: " <> show err)
+                gs0 <- readState store
+                n0 <- kelLength store
+                bytes0 <- BS.readFile path
+                result <-
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "admin-key-1"
+                        (Evt.IEPropose (DemoRemove protectedKey))
+                case result of
+                    Left (IEApp (DemoHookRefused _)) -> pure ()
+                    other -> expectationFailure ("expected hook refusal: " <> show other)
+                gs1 <- readState store
+                gs1 `shouldBe` gs0
+                n1 <- kelLength store
+                n1 `shouldBe` n0
+                bytes1 <- BS.readFile path
+                bytes1 `shouldBe` bytes0
+                closeKEL store
+                store2 <- openIntegratedKEL demoIntegration founding path
+                gs2 <- readState store2
+                gs2 `shouldBe` gs0
+                closeKEL store2
     describe "S28-1 direct-only admission" $ do
         it "direct admit by admin inserts the member" $ do
             let gs = gsWithAdmin "admin-key-1"
@@ -282,19 +335,17 @@ spec = do
                 "m@x"
                 Set.empty of
                 Right () -> pure ()
-                Left err ->
-                    expectationFailure ("expected direct admission valid: " <> show err)
+                Left err -> expectationFailure ("expected admit valid: " <> show err)
             case applyIntegratedEvent
                 demoIntegration
                 gs
                 "admin-key-1"
-                (IEDirect (AdmitMember "member-key-2" "m@x" Set.empty)) of
+                (Evt.IEDirect (AdmitMember "member-key-2" "m@x" Set.empty)) of
                 Right result ->
                     isMemberInView "member-key-2" (groupView (irState result))
                         `shouldBe` True
-                Left err ->
-                    expectationFailure ("expected direct admit to succeed: " <> show err)
-        it "reserved key is refused distinct from already-a-member" $ do
+                Left err -> expectationFailure ("expected admit ok: " <> show err)
+        it "reserved key refused apart from members" $ do
             let gs = gsWithAdmin "admin-key-1"
             case validateDirectAdmission
                 demoReserved
@@ -305,85 +356,155 @@ spec = do
                 Set.empty of
                 Left (ReservedKey _) -> pure ()
                 other -> expectationFailure ("expected ReservedKey: " <> show other)
-        prop "every voted BaseMutation value never inserts a member" $ do
+        prop "voted mutations never insert members" $ do
             forAll genDemoProposal $ \proposal' ->
                 let mutation = demoProposalMutation proposal'
                 in  case mutation of
-                        RemoveMember _ -> True
-                        ChangeRoles _ _ -> True
+                        RemoveMemberVoted _ -> True
+                        ChangeRolesVoted _ _ -> True
+        it "nonempty pendingBase roundtrips through JSON" $ do
+            let pending =
+                    PendingBase
+                        (RemoveMemberVoted "member-key-2")
+                        "admin-key-1"
+                        (Set.singleton "admin-key-1")
+            let gs = foundingDemo{pendingBase = Map.singleton "pid-1" pending}
+            decode (encode gs) `shouldBe` Just gs
+        it "old rows decode with empty pendingBase" $ do
+            let oldRow =
+                    "{\"members\": [], \"pendingProposals\": [], \"appFold\": {\"demoCounter\": 0, \"demoLog\": []}}"
+            case decodeStrict oldRow :: Maybe (GroupState DemoState) of
+                Just gs -> pendingBase gs `shouldBe` Map.empty
+                Nothing -> expectationFailure "old row should decode"
+        it "malformed pendingBase fails decode" $ do
+            let badRow =
+                    "{\"members\": [], \"pendingProposals\": [], \"pendingBase\": 42, \"appFold\": {\"demoCounter\": 0, \"demoLog\": []}}"
+            (decodeStrict badRow :: Maybe (GroupState DemoState))
+                `shouldBe` Nothing
     describe "S28-1 validate/fold agreement" $ do
-        prop
-            "accepted events fold identically via single step and foldIntegrated" $ do
-            forAll genDemoEvent $ \event ->
-                let gs = gsWithAdmin "admin-key-1"
-                    single = applyIntegratedEvent demoIntegration gs "admin-key-1" (IEApp event)
+        prop "prefix folds match steps over mixed traces" $ do
+            forAll genTrace $ \trace ->
+                let prefixes = [take k trace | k <- [0 .. length trace]]
                     folded =
-                        foldIntegrated
-                            demoIntegration
-                            (DemoState 0 [])
-                            [("admin-key-1", IEApp event)]
-                in  case single of
-                        Right _ -> True
-                        Left _ -> True
-        prop
-            "iterative steps equal foldIntegrated at every prefix including non-member and domain-invalid events" $ do
-            forAll (listOf genDemoEventIncludingInvalid) $ \events ->
-                let traces =
-                        ("outsider-key-9", IEApp (DemoAdd 1))
-                            : [("admin-key-1", IEApp event) | event <- events]
-                    folded = foldIntegrated demoIntegration (DemoState 0 []) traces
-                    _ = folded
-                in  True
-        it "replay of an accepted KEL never rejects on re-fold" $ do
+                        [ foldIntegrated demoIntegration (DemoState 0 []) prefix
+                        | prefix <- prefixes
+                        ]
+                    stepped = scanl applyStep (emptyState (DemoState 0 [])) trace
+                in  folded == stepped
+        prop "founding folds match steps over mixed traces" $ do
+            forAll genTrace $ \trace ->
+                let prefixes = [take k trace | k <- [0 .. length trace]]
+                    folded =
+                        [ foldIntegratedFrom demoIntegration (gsWithAdmin "admin-key-1") prefix
+                        | prefix <- prefixes
+                        ]
+                    stepped = scanl applyStep (gsWithAdmin "admin-key-1") trace
+                in  folded == stepped
+        it "accepted traces apply cleanly end to end" $ do
             let gs = gsWithAdmin "admin-key-1"
-            let events =
-                    [("admin-key-1", IEApp (DemoAdd 1)), ("admin-key-1", IEApp DemoNoop)]
-            let folded = foldIntegrated demoIntegration (DemoState 0 []) events
-            _ <- pure folded
-            case tryEnactBase
-                demoIntegration
-                gs
-                (demoDigest (DemoRemove "member-key-2")) of
-                Right result -> irChange result `shouldBe` Nothing
-                Left err -> expectationFailure ("expected no-change enact: " <> show err)
+            case tryEnactBase demoIntegration gs "no-such-proposal" of
+                Right result -> do
+                    irChange result `shouldBe` Nothing
+                    irState result `shouldBe` gs
+                Left err -> expectationFailure ("expected no-op enact: " <> show err)
+            let trace =
+                    [ ("admin-key-1", Evt.IEApp (DemoAdd 1))
+                    , ("admin-key-1", Evt.IEApp DemoNoop)
+                    ]
+            let outcomes =
+                    [ applyIntegratedEvent demoIntegration state signer evt
+                    | (state, (signer, evt)) <- zip (scanl applyStep gs trace) trace
+                    ]
+            all isRight outcomes `shouldBe` True
+            foldIntegratedFrom demoIntegration gs trace
+                `shouldBe` last (scanl applyStep gs trace)
     describe "S28-1 no client-decided authority" $ do
-        it "demo verdicts are observable only through the integrated boundary" $ do
+        it "verdicts flow only through the boundary" $ do
             let gs = gsWithAdmin "admin-key-1"
             case applyIntegratedEvent
                 demoIntegration
                 gs
                 "admin-key-1"
-                (IEApp (DemoAdd 4)) of
+                (Evt.IEApp (DemoAdd 4)) of
                 Right result -> demoCounter (appFold (irState result)) `shouldBe` 4
-                Left err -> expectationFailure ("expected boundary verdict: " <> show err)
-        it "full-log replay equality holds after integrated appends" $ do
-            store <- openIntegratedKEL demoIntegration (DemoState 0 []) ":memory:"
-            _ <-
+                Left err -> expectationFailure ("expected verdict: " <> show err)
+        it "replayed log reproduces live state exactly" $ do
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
+            first <-
                 appendIntegratedEvent
                     store
                     demoIntegration
                     "admin-key-1"
-                    (IEApp (DemoAdd 1))
+                    (Evt.IEApp (DemoAdd 3))
+            case first of
+                Right _ -> pure ()
+                Left err -> expectationFailure ("first append ok: " <> show err)
+            second <-
+                appendIntegratedEvent
+                    store
+                    demoIntegration
+                    "admin-key-1"
+                    (Evt.IEApp DemoNoop)
+            case second of
+                Right _ -> pure ()
+                Left err -> expectationFailure ("second append ok: " <> show err)
             live <- readState store
             rows <- readEventsFrom store 1
-            _ <- pure (live, rows)
-            pure ()
-        it
-            "validateBaseApproval reads pendingBase and refuses unknown proposals" $ do
+            length rows `shouldBe` 2
+            let decoded =
+                    mapMaybe
+                        (\se -> (seSigner se,) <$> decodeStrict (seEventBytes se))
+                        rows
+            foldIntegratedFrom demoIntegration foundingDemo decoded
+                `shouldBe` live
+            closeKEL store
+        it "unknown approval refused over pendingBase" $ do
             let gs = gsWithAdmin "admin-key-1"
             lookupPendingBase "missing-proposal" gs `shouldBe` Nothing
             case validateBaseApproval gs "admin-key-1" "missing-proposal" of
                 Left (ProposalNotFound _) -> pure ()
                 other -> expectationFailure ("expected ProposalNotFound: " <> show other)
-        it
-            "validateBaseMutation is exhaustive over RemoveMember and ChangeRoles" $ do
+        it "voted validation covers both arms exactly" $ do
             let gs = gsWithAdmin "admin-key-1"
-            case validateBaseMutation gs "admin-key-1" (RemoveMember "member-key-2") of
+            case validateBaseMutation
+                gs
+                "admin-key-1"
+                (RemoveMemberVoted "member-key-2") of
                 Left (MemberNotFound _) -> pure ()
                 other -> expectationFailure ("expected MemberNotFound: " <> show other)
             case validateBaseMutation
                 gs
                 "admin-key-1"
-                (ChangeRoles "admin-key-1" Set.empty) of
+                (ChangeRolesVoted "admin-key-1" Set.empty) of
                 Right () -> pure ()
-                Left err -> expectationFailure ("expected ChangeRoles valid: " <> show err)
+                Left err -> expectationFailure ("expected ChangeRoles ok: " <> show err)
+        it "pending entries survive close and reopen" $ do
+            withTempIntegrated $ \path -> do
+                let founding =
+                        demoInitialState
+                            { members =
+                                Map.fromList
+                                    [ ("admin-key-1", adminMember "admin-key-1")
+                                    , ("admin-key-2", adminMember "admin-key-2")
+                                    , ("admin-key-3", adminMember "admin-key-3")
+                                    , ("member-key-2", plainMember "member-key-2")
+                                    ]
+                            }
+                store <- openIntegratedKEL demoIntegration founding path
+                result <-
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "admin-key-1"
+                        (Evt.IEPropose (DemoRemove "member-key-2"))
+                case result of
+                    Right pending -> irChange pending `shouldBe` Nothing
+                    Left err -> expectationFailure ("expected pending ok: " <> show err)
+                live <- readState store
+                lookupPendingBase (demoDigest (DemoRemove "member-key-2")) live
+                    `shouldSatisfy` (/= Nothing)
+                closeKEL store
+                store2 <- openIntegratedKEL demoIntegration founding path
+                live2 <- readState store2
+                live2 `shouldBe` live
+                closeKEL store2

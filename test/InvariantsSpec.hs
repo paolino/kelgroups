@@ -112,6 +112,7 @@ spec = do
                 GroupState
                     { members = Map.empty
                     , pendingProposals = Map.empty
+                    , pendingBase = Map.empty
                     , appFold = ()
                     }
                 `shouldBe` Bootstrap
@@ -137,5 +138,6 @@ emptyState' _ =
     GroupState
         { members = Map.empty
         , pendingProposals = Map.empty
+        , pendingBase = Map.empty
         , appFold = ()
         }

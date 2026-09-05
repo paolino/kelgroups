@@ -12,6 +12,10 @@ module KelGroups.Event
     ( GroupEvent (..)
     , BaseEvent (..)
     , Proposal (..)
+    , DirectCommand (..)
+    , BaseMutation (..)
+    , BaseChange (..)
+    , IntegratedEvent (..)
     ) where
 
 import Data.Set (Set)
@@ -43,6 +47,11 @@ data BaseEvent
 
 {- | A proposal for a group change. Proposals require
 admin majority to take effect.
+
+HISTORICAL-NON-PRODUCTION: 'Proposal'/'BaseEvent'/'GroupEvent' keep the
+accepted #54 evidence. The integrated production path below
+('DirectCommand'/'BaseMutation'/'IntegratedEvent') never reads these;
+they receive no new production responsibility in this slice.
 -}
 data Proposal
     = -- | Add a new member with initial roles
@@ -63,4 +72,45 @@ data Proposal
         -- ^ CESR-encoded public key
         (Set Role)
         -- ^ New role set
+    deriving stock (Show, Eq)
+
+{- | The direct base-command vocabulary: exactly one constructor, member
+admission. The signer is supplied separately by the integrated
+transition, so no command carries a second author identity.
+-}
+data DirectCommand = AdmitMember Text Text (Set Role)
+    deriving stock (Show, Eq)
+
+{- | The voted base vocabulary: removal and role change, and nothing
+else. Admission is not representable here, so no pending approval can
+enact one. Constructor names carry a 'Voted' suffix because Haskell
+shares one constructor namespace per module while Lean namespaces per
+inductive (r5 D1 mapping); shapes match Lean 'BaseMutation' exactly.
+Adding an admission constructor stops the exhaustive enactment matching
+compiling.
+-}
+data BaseMutation
+    = RemoveMemberVoted Text
+    | ChangeRolesVoted Text (Set Role)
+    deriving stock (Show, Eq)
+
+{- | The observable base-change vocabulary. A committed substrate
+membership or role effect is exactly one of these three, each naming the
+affected key.
+-}
+data BaseChange
+    = MemberAdmitted Text
+    | MemberRemoved Text
+    | RolesChanged Text
+    deriving stock (Show, Eq)
+
+{- | The closed integrated event vocabulary. Base proposal and app event
+are distinct type parameters, so an app event cannot be a proposal and no
+membership action can arrive dressed as app payload.
+-}
+data IntegratedEvent bp e
+    = IEDirect DirectCommand
+    | IEPropose bp
+    | IEApprove ProposalId
+    | IEApp e
     deriving stock (Show, Eq)
