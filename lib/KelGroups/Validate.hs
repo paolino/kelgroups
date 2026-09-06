@@ -11,6 +11,9 @@ and role preconditions.
 module KelGroups.Validate
     ( validateEvent
     , ValidationError (..)
+    , validateDirectAdmission
+    , validateBaseMutation
+    , validateBaseApproval
     ) where
 
 import Data.Map.Strict qualified as Map
@@ -19,18 +22,22 @@ import Data.Text (Text)
 import KelGroups.Bootstrap (AuthMode (..), authMode)
 import KelGroups.Event
     ( BaseEvent (..)
+    , BaseMutation (..)
     , GroupEvent (..)
     , Proposal (..)
     )
 import KelGroups.State
     ( GroupState (..)
+    , PendingBase (..)
     , PendingProposal (..)
     , isAdmin
     , isMember
+    , lookupPendingBase
     )
 import KelGroups.Types
     ( GroupConfig (..)
     , Member (..)
+    , ProposalId
     , Role (..)
     , RoleDef (..)
     , RoleName
@@ -62,11 +69,19 @@ data ValidationError
       RoleRemovePrecondition RoleName
     | -- | Key is not a valid CESR Ed25519 public key
       InvalidKey Text
+    | -- | Key is reserved and may never become a member
+      ReservedKey Text
     deriving stock (Show, Eq)
 
 {- | Validate a group event against the current
 condition. The signer is the CESR-encoded public key
 of the event author.
+
+HISTORICAL-NON-PRODUCTION: 'validateEvent' and the proposal/approval
+validators below keep the accepted behavior. The integrated production
+routes ('validateDirectAdmission'/'validateBaseMutation'/
+'validateBaseApproval') never call these; they receive no new production
+responsibility in this slice.
 -}
 validateEvent
     :: GroupConfig a
@@ -236,3 +251,52 @@ requireValidCesrKey key =
         Right Primitive{code = Ed25519PubKey} ->
             Right ()
         _ -> Left (InvalidKey key)
+
+{- | The sole member-insertion validator. Three guards in a fixed order
+so the refusal identity is exact: a non-admin signer is 'NotAnAdmin',
+the reserved key is 'ReservedKey', and an existing key is
+'MemberAlreadyExists'. There is no bootstrap arm: a group with no admin
+admits nobody; the founding admin arrives through the application's
+guarded initial aggregate.
+-}
+validateDirectAdmission
+    :: Text
+    -> GroupState s
+    -> Text
+    -> Text
+    -> Text
+    -> Set.Set Role
+    -> Either ValidationError ()
+validateDirectAdmission reserved gs signer target _email _roles
+    | not (isAdmin signer gs) = Left (NotAnAdmin signer)
+    | target == reserved = Left (ReservedKey target)
+    | isMember target gs = Left (MemberAlreadyExists target)
+    | otherwise = Right ()
+
+{- | Admissibility of a voted base mutation. Exhaustive over
+'BaseMutation': an added constructor stops this compiling rather than
+acquiring a default.
+-}
+validateBaseMutation
+    :: GroupState s -> Text -> BaseMutation -> Either ValidationError ()
+validateBaseMutation gs signer = \case
+    RemoveMemberVoted key -> do
+        requireAdmin signer gs
+        requireMember key gs
+    ChangeRolesVoted key _ -> do
+        requireAdmin signer gs
+        requireMember key gs
+
+{- | Admissibility of an approval of a pending base mutation. Reads the
+integrated 'pendingBase' store (never the historical one).
+-}
+validateBaseApproval
+    :: GroupState s -> Text -> ProposalId -> Either ValidationError ()
+validateBaseApproval gs signer proposalId = do
+    requireAdmin signer gs
+    case lookupPendingBase proposalId gs of
+        Nothing -> Left (ProposalNotFound proposalId)
+        Just pending
+            | Set.member signer (pbApprovals pending) ->
+                Left (AlreadyApproved signer proposalId)
+            | otherwise -> Right ()

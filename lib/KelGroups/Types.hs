@@ -18,9 +18,14 @@ module KelGroups.Types
     , ProposalId
     , isAdminRole
     , hasAdmin
+    , GroupView (..)
+    , lookupMemberInView
+    , isMemberInView
+    , isAdminInView
     ) where
 
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Text (Text)
 
@@ -60,6 +65,32 @@ isAdminRole _ = False
 -- | Check if a role set contains any admin role.
 hasAdmin :: Set Role -> Bool
 hasAdmin = any isAdminRole
+
+{- | An immutable projection of the one writable member/role relation.
+Carries no app payload and confers no capability to return or replace a
+group aggregate: consumers read membership and roles and produce nothing
+but app payload.
+-}
+newtype GroupView = GroupView
+    { gvMembers :: Map Text Member
+    -- ^ Sole canonical member relation
+    }
+    deriving stock (Eq, Show)
+
+-- | The member registered under a key in the canonical view, if any.
+lookupMemberInView :: Text -> GroupView -> Maybe Member
+lookupMemberInView key view = Map.lookup key (gvMembers view)
+
+-- | Is a key a current member of the canonical relation?
+isMemberInView :: Text -> GroupView -> Bool
+isMemberInView key view = Map.member key (gvMembers view)
+
+{- | Is a key a current member holding an admin role? The one notion of
+responsibility every consumer reads; there is no second list.
+-}
+isAdminInView :: Text -> GroupView -> Bool
+isAdminInView key view =
+    maybe False (hasAdmin . memberRoles) (lookupMemberInView key view)
 
 -- | A group member with their public key and roles.
 data Member = Member

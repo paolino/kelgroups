@@ -152,6 +152,7 @@ arbitraryGroupState = do
         GroupState
             { members = memberMap
             , pendingProposals = Map.empty
+            , pendingBase = Map.empty
             , appFold = ()
             }
 
@@ -196,6 +197,7 @@ gsWithAdminCount n =
                 | i <- [1 .. n]
                 ]
         , pendingProposals = Map.empty
+        , pendingBase = Map.empty
         , appFold = ()
         }
   where

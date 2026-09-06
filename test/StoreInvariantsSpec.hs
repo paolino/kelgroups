@@ -207,5 +207,6 @@ emptyGS a =
     GroupState
         { members = Map.empty
         , pendingProposals = Map.empty
+        , pendingBase = Map.empty
         , appFold = a
         }

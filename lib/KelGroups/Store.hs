@@ -24,13 +24,16 @@ module KelGroups.Store
     , openKEL
     , openKELWithIdentity
     , closeKEL
+    , openIntegratedKEL
     , appendEvent
+    , appendIntegratedEvent
     , readState
     , readEventsFrom
     , kelLength
     , chainTip
     ) where
 
+import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Concurrent.STM
     ( TVar
     , atomically
@@ -39,10 +42,12 @@ import Control.Concurrent.STM
     , readTVarIO
     , writeTVar
     )
+import Control.Exception (evaluate)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Database.SQLite.Simple
     ( Connection
@@ -54,8 +59,15 @@ import Database.SQLite.Simple
     , query
     , query_
     )
-import KelGroups.Event (GroupEvent)
-import KelGroups.Fold (AppFold)
+import KelGroups.Event (GroupEvent, IntegratedEvent)
+import KelGroups.Fold
+    ( AppFold
+    , IntegratedError
+    , IntegratedResult (..)
+    , Integration
+    , applyIntegratedEvent
+    , foldIntegratedFrom
+    )
 import KelGroups.Fold qualified as Fold
 import KelGroups.Server.JSON ()
 import KelGroups.State (GroupState, emptyState)
@@ -122,12 +134,20 @@ data KELStore a = KELStore
     -- ^ Server Ed25519 identity (for signing)
     , serverCesrKey :: Text
     -- ^ CESR-encoded server public key
+    , storeAppendLock :: MVar ()
+    -- ^ Serializes integrated appends (F1 repair)
     }
 
 {- | Open or create a KEL at the given file path.
 Creates the server identity and L1 inception on
 first open. Replays all existing events to rebuild
 the in-memory state and chain tip.
+
+HISTORICAL-NON-PRODUCTION: 'openKEL'/'openKELWithIdentity'/'appendEvent'
+keep the accepted behavior and the historical group-event log. The
+integrated production path ('openIntegratedKEL'/'appendIntegratedEvent'
+below) never calls these; they receive no new production responsibility
+in this slice.
 -}
 openKEL
     :: (FromJSON a)
@@ -252,6 +272,7 @@ openKELWith appFoldFn initial path mProvided = do
             conn
             "SELECT COUNT(*) FROM events"
     lVar <- newTVarIO (n :: Int)
+    appendLock <- newMVar ()
     pure
         KELStore
             { storeConn = conn
@@ -260,6 +281,7 @@ openKELWith appFoldFn initial path mProvided = do
             , lengthVar = lVar
             , serverKeyPair = kp
             , serverCesrKey = cesrKey
+            , storeAppendLock = appendLock
             }
 
 -- | Close the KEL store.
@@ -470,3 +492,160 @@ replayRow appFoldFn gs (signer, groupJson) =
                 gs
                 (signer, groupEvt)
         Nothing -> gs
+
+-- --------------------------------------------------------
+-- Integrated production store
+-- --------------------------------------------------------
+
+{- | Open or create an integrated KEL at the given file path. The caller
+supplies the founding aggregate (which holds the founding admin): a fresh
+database persists it in a 'founding' table and starts from it; an existing
+database loads it and REQUIRES the passed founding to equal the stored one
+(else IO failure), then replays stored integrated rows over it. There is
+no bootstrap arm and no server-signed inception on this path: integrated
+rows carry no KERI envelope (envelope columns hold documented
+placeholders; the authoritative payload is the integrated-event JSON),
+and the server identity below is ephemeral record filler.
+-}
+openIntegratedKEL
+    :: (ToJSON s, FromJSON s, FromJSON e, FromJSON bp, Eq s)
+    => Integration s e bp err
+    -> GroupState s
+    -> FilePath
+    -> IO (KELStore s)
+openIntegratedKEL integration founding path = do
+    conn <- open path
+    execute_
+        conn
+        "CREATE TABLE IF NOT EXISTS events \
+        \( id INTEGER PRIMARY KEY AUTOINCREMENT \
+        \, signer TEXT NOT NULL \
+        \, event_bytes TEXT NOT NULL \
+        \, signature TEXT NOT NULL \
+        \, group_event TEXT NOT NULL \
+        \, prefix TEXT NOT NULL \
+        \, seq_no INTEGER NOT NULL \
+        \, digest TEXT NOT NULL \
+        \)"
+    execute_
+        conn
+        "CREATE TABLE IF NOT EXISTS founding \
+        \( id INTEGER PRIMARY KEY CHECK (id = 1) \
+        \, founding_json TEXT NOT NULL \
+        \)"
+    foundingRows <-
+        query_
+            conn
+            "SELECT founding_json FROM founding"
+            :: IO [Only LBS.ByteString]
+    [Only eventCount] <-
+        query_
+            conn
+            "SELECT COUNT(*) FROM events"
+            :: IO [Only Int]
+    base <- case foundingRows of
+        [] ->
+            if eventCount == 0
+                then do
+                    execute
+                        conn
+                        "INSERT INTO founding \
+                        \(id, founding_json) VALUES (1, ?)"
+                        (Only (encode founding))
+                    pure founding
+                else fail "founding absent but events exist"
+        [Only stored] ->
+            case decode stored of
+                Nothing -> fail "stored founding is corrupt"
+                Just loaded ->
+                    if loaded == founding
+                        then pure loaded
+                        else
+                            fail
+                                "founding mismatch: passed founding differs \
+                                \from stored founding"
+        _ -> fail "multiple founding rows"
+    rows <-
+        query_
+            conn
+            "SELECT signer, group_event FROM events ORDER BY id"
+            :: IO [(Text, LBS.ByteString)]
+    let decoded =
+            [ (signer, evt)
+            | (signer, js) <- rows
+            , Just evt <- [decode js]
+            ]
+        gs = foldIntegratedFrom integration base decoded
+    kp <- generateKeyPair
+    let pkBytes = publicKeyBytes (publicKey kp)
+        cesrKey =
+            Cesr.encode
+                Primitive{code = Ed25519PubKey, raw = pkBytes}
+    stVar <- newTVarIO gs
+    tVar <- newTVarIO Nothing
+    lVar <- newTVarIO eventCount
+    appendLock <- newMVar ()
+    pure
+        KELStore
+            { storeConn = conn
+            , stateVar = stVar
+            , tipVar = tVar
+            , lengthVar = lVar
+            , serverKeyPair = kp
+            , serverCesrKey = cesrKey
+            , storeAppendLock = appendLock
+            }
+
+{- | Validate-then-append on the integrated boundary. Runs
+'applyIntegratedEvent' first: on refusal persists NOTHING and touches NO
+in-memory state; on success inserts the SQL row then updates the hot
+state, tip length included.
+
+Concurrency + refusal order (F3 repair): appends hold 'storeAppendLock'
+across one serialized transition — fresh state read, then the decision,
+then payload-encode forcing, then the SQL row, then the TVar commit.
+The decision is authoritative and comes first: a refusal short-circuits
+before the application codec is ever forced, so a faulting codec cannot
+replace a payload-independent refusal with an exception. Encode forcing
+stays post-acceptance and pre-INSERT in the same hold, so an accepted
+faulting codec still throws observably with hot state untouched, and
+overlapping accepted callers still conserve every committed transition
+and event count. A SQL failure still propagates to the caller with hot
+state untouched and the lock released.
+-}
+appendIntegratedEvent
+    :: (ToJSON e, ToJSON bp)
+    => KELStore s
+    -> Integration s e bp err
+    -> Text
+    -> IntegratedEvent bp e
+    -> IO (Either (IntegratedError err) (IntegratedResult s))
+appendIntegratedEvent store integration signer event =
+    withMVar (storeAppendLock store) $ \() -> do
+        gs <- readState store
+        case applyIntegratedEvent integration gs signer event of
+            Left err -> pure (Left err)
+            Right result -> do
+                let payloadJson = encode event
+                    payloadText = TE.decodeUtf8 (LBS.toStrict payloadJson)
+                    noEnvelope = T.empty
+                _ <- evaluate payloadText
+                n <- kelLength store
+                execute
+                    (storeConn store)
+                    "INSERT INTO events \
+                    \(signer, event_bytes, signature, \
+                    \group_event, prefix, seq_no, digest) \
+                    \VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    ( signer
+                    , payloadText
+                    , noEnvelope
+                    , payloadJson
+                    , noEnvelope
+                    , n + 1
+                    , noEnvelope
+                    )
+                atomically $ do
+                    writeTVar (stateVar store) (irState result)
+                    writeTVar (lengthVar store) (n + 1)
+                pure (Right result)
