@@ -47,6 +47,8 @@ library
     KelGroups.Trivial
     KelGroups.Types
     KelGroups.Validate
+    KelGroups.Vote.State
+    KelGroups.Vote.Types
 
   build-depends:
     , aeson          >=2.1  && <2.3
