@@ -303,9 +303,12 @@ spec = do
         -- a co-occurrence receipt (A commits observed while B runs; the
         -- length-delta does NOT prove a shared vulnerability window) and
         -- exact conservation; no defect claimed in bdc9895.
-        -- Timeout/poll failures are SETUP, never semantic kills. Cleanup
-        -- is guaranteed on every path (bracket: stop, kill, close)
-        -- without masking the failure signal.
+        -- Timeout/poll failures are SETUP, never semantic kills.
+        -- Cleanup release coverage holds on every exit path (bracket:
+        -- stop, kill, close); execution-observed on positive +
+        -- semantic-negative; setup-failure, closeKEL-throw,
+        -- kill-live-worker and thrown-exception rows argued with limits
+        -- (see resubmission limit list).
         -- Order boundary: no sqlite-simple in test deps, so seq_no is not
         -- read directly; id-order == commit order is pinned by exact
         -- replay == live over distinguishable log entries.
@@ -331,7 +334,7 @@ spec = do
                                     case r of
                                         Right _ -> loopA (n + 1)
                                         Left err -> putMVar doneA (Left (show err))
-                    tidA <- mask $ \restore -> do
+                    _tidA <- mask $ \restore -> do
                         tid <- forkIO (restore (loopA 0))
                         writeIORef workerRef [tid]
                         pure tid
@@ -366,7 +369,7 @@ spec = do
                                     Left err -> putMVar doneB (Left (show err))
                     awaitActive 3000
                     commitsBeforeB <- kelLength store
-                    tidB <- mask $ \restore -> do
+                    _tidB <- mask $ \restore -> do
                         tid <- forkIO (restore (loopB 200 0))
                         modifyIORef' workerRef (tid :)
                         pure tid
