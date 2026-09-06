@@ -20,7 +20,7 @@ import Control.Concurrent
     , tryPutMVar
     , tryReadMVar
     )
-import Control.Exception (SomeException, bracket, try)
+import Control.Exception (SomeException, bracket, mask, try)
 import Data.Aeson (ToJSON (..), decode, decodeStrict, encode)
 import Data.ByteString qualified as BS
 import Data.Either (isRight)
@@ -331,8 +331,10 @@ spec = do
                                     case r of
                                         Right _ -> loopA (n + 1)
                                         Left err -> putMVar doneA (Left (show err))
-                    tidA <- forkIO (loopA 0)
-                    writeIORef workerRef [tidA]
+                    tidA <- mask $ \restore -> do
+                        tid <- forkIO (restore (loopA 0))
+                        writeIORef workerRef [tid]
+                        pure tid
                     pure (store, stopFlag, doneA, doneB, workerRef)
                 )
                 ( \(store, stopFlag, _doneA, _doneB, workerRef) -> do
@@ -364,8 +366,10 @@ spec = do
                                     Left err -> putMVar doneB (Left (show err))
                     awaitActive 3000
                     commitsBeforeB <- kelLength store
-                    tidB <- forkIO (loopB 200 0)
-                    modifyIORef' workerRef (tidB :)
+                    tidB <- mask $ \restore -> do
+                        tid <- forkIO (restore (loopB 200 0))
+                        modifyIORef' workerRef (tid :)
+                        pure tid
                     outcomeB <- timeout 300000000 (takeMVar doneB)
                     bCount <- case outcomeB of
                         Just (Right n) -> pure n
