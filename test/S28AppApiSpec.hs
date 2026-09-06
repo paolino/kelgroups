@@ -11,8 +11,7 @@ domain-invalid events.
 module S28AppApiSpec (spec) where
 
 import Control.Concurrent
-    ( ThreadId
-    , forkIO
+    ( forkIO
     , killThread
     , newEmptyMVar
     , putMVar
@@ -25,13 +24,7 @@ import Control.Exception (SomeException, bracket, try)
 import Data.Aeson (ToJSON (..), decode, decodeStrict, encode)
 import Data.ByteString qualified as BS
 import Data.Either (isRight)
-import Data.IORef
-    ( IORef
-    , modifyIORef'
-    , newIORef
-    , readIORef
-    , writeIORef
-    )
+import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.List (sort)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -47,7 +40,7 @@ import KelGroups.Event qualified as Evt
 import KelGroups.Fold
     ( IntegratedError (..)
     , IntegratedResult (..)
-    , Integration
+    , Integration (..)
     , applyIntegratedEvent
     , commitBaseChange
     , enactMutation
