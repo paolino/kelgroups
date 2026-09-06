@@ -10,7 +10,8 @@ domain-invalid events.
 -}
 module S28AppApiSpec (spec) where
 
-import Data.Aeson (decode, decodeStrict, encode)
+import Control.Exception (SomeException, try)
+import Data.Aeson (ToJSON (..), decode, decodeStrict, encode)
 import Data.ByteString qualified as BS
 import Data.Either (isRight)
 import Data.Map.Strict qualified as Map
@@ -27,6 +28,7 @@ import KelGroups.Event qualified as Evt
 import KelGroups.Fold
     ( IntegratedError (..)
     , IntegratedResult (..)
+    , Integration
     , applyIntegratedEvent
     , commitBaseChange
     , enactMutation
@@ -43,7 +45,8 @@ import KelGroups.State
     , lookupPendingBase
     )
 import KelGroups.Store
-    ( StoredEvent (..)
+    ( KELStore
+    , StoredEvent (..)
     , appendIntegratedEvent
     , closeKEL
     , kelLength
@@ -70,6 +73,7 @@ import S28DemoApp
     , DemoEvent (..)
     , DemoProposal (..)
     , DemoState (..)
+    , demoBaseHook
     , demoDigest
     , demoInitialState
     , demoIntegration
@@ -150,6 +154,45 @@ applyStep gs (signer, evt) =
     case applyIntegratedEvent demoIntegration gs signer evt of
         Right result -> irState result
         Left _ -> gs
+
+-- Deliberately faulting application codec: a refused caller must never
+-- need it. Accepted use throws observably before any durable write.
+data FaultingCodec = FaultingCodec
+    deriving stock (Eq, Show)
+
+instance ToJSON FaultingCodec where
+    toJSON _ = error "S28-R2 faulting codec (refusal must short-circuit)"
+
+faultingIntegration
+    :: Integration DemoState FaultingCodec DemoProposal DemoError
+faultingIntegration =
+    Integration
+        { intReserved = demoReserved
+        , intDigest = demoDigest
+        , intProposalMutation = demoProposalMutation
+        , intAppFold = \_ _ _ st _ -> Right st
+        , intBaseHook = demoBaseHook
+        }
+
+tryFaultingAppend
+    :: KELStore DemoState
+    -> Text
+    -> IO
+        ( Either
+            SomeException
+            ( Either
+                (IntegratedError DemoError)
+                (IntegratedResult DemoState)
+            )
+        )
+tryFaultingAppend store signer =
+    try
+        ( appendIntegratedEvent
+            store
+            faultingIntegration
+            signer
+            (Evt.IEApp FaultingCodec)
+        )
 
 spec :: Spec
 spec = do
@@ -240,6 +283,74 @@ spec = do
                         (\se -> (seSigner se,) <$> decodeStrict (seEventBytes se))
                         rows
             length decoded `shouldBe` 2
+            foldIntegratedFrom demoIntegration foundingDemo decoded
+                `shouldBe` live
+            closeKEL store
+        it "faulting codec from member throws observably" $ do
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
+            memberResult <- tryFaultingAppend store "admin-key-1"
+            case memberResult of
+                Left _ -> pure ()
+                Right other ->
+                    expectationFailure
+                        ("expected codec exception: " <> show other)
+            live <- readState store
+            demoCounter (appFold live) `shouldBe` 0
+            n <- kelLength store
+            n `shouldBe` 0
+            rows <- readEventsFrom store 1
+            length rows `shouldBe` 0
+            closeKEL store
+        it "faulting codec from nonmember keeps exact refusal" $ do
+            let pureDecision =
+                    applyIntegratedEvent
+                        faultingIntegration
+                        foundingDemo
+                        "outsider"
+                        (Evt.IEApp FaultingCodec)
+            pureDecision
+                `shouldBe` Left (IEValidation (NotAMember "outsider"))
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
+            refused <-
+                appendIntegratedEvent
+                    store
+                    faultingIntegration
+                    "outsider"
+                    (Evt.IEApp FaultingCodec)
+            refused `shouldBe` Left (IEValidation (NotAMember "outsider"))
+            live <- readState store
+            demoCounter (appFold live) `shouldBe` 0
+            n <- kelLength store
+            n `shouldBe` 0
+            rows <- readEventsFrom store 1
+            length rows `shouldBe` 0
+            closeKEL store
+        it "faulting codec leaves zero state, counts and rows" $ do
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
+            memberResult <- tryFaultingAppend store "admin-key-1"
+            case memberResult of
+                Left _ -> pure ()
+                Right other ->
+                    expectationFailure
+                        ("expected codec exception: " <> show other)
+            refused <-
+                appendIntegratedEvent
+                    store
+                    faultingIntegration
+                    "outsider"
+                    (Evt.IEApp FaultingCodec)
+            refused `shouldBe` Left (IEValidation (NotAMember "outsider"))
+            live <- readState store
+            demoCounter (appFold live) `shouldBe` 0
+            n <- kelLength store
+            n `shouldBe` 0
+            rows <- readEventsFrom store 1
+            length rows `shouldBe` 0
+            let decoded =
+                    mapMaybe
+                        (\se -> (seSigner se,) <$> decodeStrict (seEventBytes se))
+                        rows
+            length decoded `shouldBe` 0
             foldIntegratedFrom demoIntegration foundingDemo decoded
                 `shouldBe` live
             closeKEL store

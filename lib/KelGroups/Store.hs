@@ -601,13 +601,17 @@ openIntegratedKEL integration founding path = do
 in-memory state; on success inserts the SQL row then updates the hot
 state, tip length included.
 
-Concurrency (F1 repair): appends hold 'storeAppendLock' from the state
-read through the TVar commit, so overlapping accepted callers conserve
-every committed transition and event count. The payload encode is forced
-before the lock: its 'ToJSON' rendering is pure in production but carries
-the auditor's test-only serialization rendezvous, which must complete
-before either caller blocks on the lock. A SQL failure still propagates
-to the caller with hot state untouched.
+Concurrency + refusal order (F3 repair): appends hold 'storeAppendLock'
+across one serialized transition — fresh state read, then the decision,
+then payload-encode forcing, then the SQL row, then the TVar commit.
+The decision is authoritative and comes first: a refusal short-circuits
+before the application codec is ever forced, so a faulting codec cannot
+replace a payload-independent refusal with an exception. Encode forcing
+stays post-acceptance and pre-INSERT in the same hold, so an accepted
+faulting codec still throws observably with hot state untouched, and
+overlapping accepted callers still conserve every committed transition
+and event count. A SQL failure still propagates to the caller with hot
+state untouched and the lock released.
 -}
 appendIntegratedEvent
     :: (ToJSON e, ToJSON bp)
@@ -616,16 +620,16 @@ appendIntegratedEvent
     -> Text
     -> IntegratedEvent bp e
     -> IO (Either (IntegratedError err) (IntegratedResult s))
-appendIntegratedEvent store integration signer event = do
-    let payloadJson = encode event
-        payloadText = TE.decodeUtf8 (LBS.toStrict payloadJson)
-        noEnvelope = T.empty
-    _ <- evaluate payloadText
+appendIntegratedEvent store integration signer event =
     withMVar (storeAppendLock store) $ \() -> do
         gs <- readState store
         case applyIntegratedEvent integration gs signer event of
             Left err -> pure (Left err)
             Right result -> do
+                let payloadJson = encode event
+                    payloadText = TE.decodeUtf8 (LBS.toStrict payloadJson)
+                    noEnvelope = T.empty
+                _ <- evaluate payloadText
                 n <- kelLength store
                 execute
                     (storeConn store)
