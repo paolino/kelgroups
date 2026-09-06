@@ -10,10 +10,19 @@ domain-invalid events.
 -}
 module S28AppApiSpec (spec) where
 
+import Control.Concurrent
+    ( forkIO
+    , newEmptyMVar
+    , putMVar
+    , takeMVar
+    , threadDelay
+    , tryReadMVar
+    )
 import Control.Exception (SomeException, try)
 import Data.Aeson (ToJSON (..), decode, decodeStrict, encode)
 import Data.ByteString qualified as BS
 import Data.Either (isRight)
+import Data.List (sort)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Set qualified as Set
@@ -84,6 +93,7 @@ import S28DemoApp
     )
 import System.Directory (removeFile)
 import System.IO.Temp (emptySystemTempFile)
+import System.Timeout (timeout)
 import Test.Hspec
     ( Spec
     , describe
@@ -283,6 +293,111 @@ spec = do
                         (\se -> (seSigner se,) <$> decodeStrict (seEventBytes se))
                         rows
             length decoded `shouldBe` 2
+            foldIntegratedFrom demoIntegration foundingDemo decoded
+                `shouldBe` live
+            closeKEL store
+        -- Assurance scope (NOTE-001): genuine overlap (A commits proven
+        -- inside B's span) with exact conservation; no defect claimed in
+        -- 55e95fc. Timeout/poll failures are SETUP, never semantic kills.
+        -- Order boundary: no sqlite-simple in test deps, so seq_no is not
+        -- read directly; id-order == commit order is pinned by exact
+        -- replay == live over distinguishable log entries.
+        it "overlapping appends conserve every committed transition" $ do
+            stopFlag <- newEmptyMVar
+            doneA <- newEmptyMVar
+            doneB <- newEmptyMVar
+            store <- openIntegratedKEL demoIntegration foundingDemo ":memory:"
+            let appendA =
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "admin-key-1"
+                        (Evt.IEApp (DemoAdd 1))
+                appendB =
+                    appendIntegratedEvent
+                        store
+                        demoIntegration
+                        "admin-key-1"
+                        (Evt.IEApp (DemoAdd 2))
+                loopA n = do
+                    stopped <- tryReadMVar stopFlag
+                    case stopped of
+                        Just _ -> pure (Right n)
+                        Nothing -> do
+                            r <- appendA
+                            case r of
+                                Right _ -> loopA (n + 1)
+                                Left err -> pure (Left (show err))
+                loopB k n
+                    | k <= (0 :: Int) = pure (Right n)
+                    | otherwise = do
+                        r <- appendB
+                        case r of
+                            Right _ -> loopB (k - 1) (n + 1)
+                            Left err -> pure (Left (show err))
+                awaitActive k
+                    | k <= (0 :: Int) =
+                        expectationFailure "SETUP: worker A never committed"
+                    | otherwise = do
+                        n0 <- kelLength store
+                        if n0 >= 5
+                            then pure ()
+                            else threadDelay 10000 >> awaitActive (k - 1)
+            _ <- forkIO (loopA 0 >>= putMVar doneA)
+            awaitActive 3000
+            commitsBeforeB <- kelLength store
+            _ <- forkIO (loopB 200 0 >>= putMVar doneB)
+            outcomeB <- timeout 300000000 (takeMVar doneB)
+            bCount <- case outcomeB of
+                Just (Right n) -> pure n
+                Just (Left err) ->
+                    expectationFailure ("worker B refused: " <> err) >> pure 0
+                Nothing ->
+                    expectationFailure "SETUP: worker B join timed out" >> pure 0
+            commitsAfterB <- kelLength store
+            let concurrentCommits = commitsAfterB - commitsBeforeB - bCount
+            if concurrentCommits >= 1
+                then pure ()
+                else
+                    expectationFailure
+                        ( "SETUP: overlap not exercised (delta="
+                            <> show (commitsAfterB - commitsBeforeB)
+                            <> ")"
+                        )
+            putMVar stopFlag ()
+            outcomeA <- timeout 300000000 (takeMVar doneA)
+            aCount <- case outcomeA of
+                Just (Right n) -> pure n
+                Just (Left err) ->
+                    expectationFailure ("worker A refused: " <> err) >> pure 0
+                Nothing ->
+                    expectationFailure "SETUP: worker A join timed out" >> pure 0
+            bCount `shouldBe` 200
+            live <- readState store
+            demoCounter (appFold live) `shouldBe` (aCount + 2 * bCount)
+            members live `shouldBe` members foundingDemo
+            pendingBase live `shouldBe` Map.empty
+            pendingProposals live `shouldBe` Map.empty
+            sort (demoLog (appFold live))
+                `shouldBe` sort (replicate aCount "add 1" ++ replicate 200 "add 2")
+            n <- kelLength store
+            n `shouldBe` (aCount + bCount)
+            rows <- readEventsFrom store 1
+            length rows `shouldBe` (aCount + bCount)
+            let decoded =
+                    mapMaybe
+                        (\se -> (seSigner se,) <$> decodeStrict (seEventBytes se))
+                        rows
+            length decoded `shouldBe` (aCount + bCount)
+            let adds =
+                    mapMaybe
+                        ( \row -> case row of
+                            (_, Evt.IEApp (DemoAdd d)) -> Just d
+                            _ -> Nothing
+                        )
+                        decoded
+            length (filter (== 1) adds) `shouldBe` aCount
+            length (filter (== 2) adds) `shouldBe` bCount
             foldIntegratedFrom demoIntegration foundingDemo decoded
                 `shouldBe` live
             closeKEL store
