@@ -1,4 +1,5 @@
 # kelgroups — Design Document
+> Superseded in part: the [security design](security-design.md) replaces the server identity, bootstrap mode and admin voting described here.
 
 ## 1. KEL Basics
 

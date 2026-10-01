@@ -1,4 +1,5 @@
 # kelgroups — Implementation Plan
+> Superseded in part: the [security design](security-design.md) replaces the server identity, bootstrap mode and admin voting described here.
 
 ## Nix Setup
 

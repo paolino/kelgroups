@@ -1,4 +1,5 @@
 # Key Export/Import (JWK)
+> Superseded in part: the [security design](security-design.md) replaces the server identity described here.
 
 Ed25519 private keys can be exported and imported in the
 standard JSON Web Key format
