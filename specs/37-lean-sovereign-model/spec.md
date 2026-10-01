@@ -49,7 +49,7 @@ follows one proved contract.
 | T4 | An action whose `p` is not the signer's current KEL tip is refused; in particular, an action built against tip t is refused after any admitted rotation (or other admitted action) of that signer. |
 | T5 | Every admitted non-genesis action's signer is a current member before admission; every admitted add/remove/grant/revoke has an admin signer; leave concerns only its signer. A removed member's later actions are refused. |
 | T6 | On every reachable state, no group has members and no admin (and admins ⊆ members). |
-| T0 | Anti-vacuity: admission is complete — every action satisfying all R3 conditions is admitted (the "if" half of R3); plus a concrete instantiated trace in which genesis, add, a member's opaque action and a rotation are admitted and a stale action, a replay and a last-admin self-demotion are refused, checked by evaluation. |
+| T0 | Anti-vacuity: admission is exactly R3 — every action satisfying all R3 conditions is admitted (completeness), and every admitted action satisfied every R3 condition, signature validity included (soundness); plus a concrete instantiated trace in which genesis, add, a member's opaque action and a rotation are admitted and a stale action, a replay, an action with an invalid signature and a last-admin self-demotion are refused, checked by evaluation. |
 
 ## Out of scope (named residuals)
 
