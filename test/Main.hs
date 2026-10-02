@@ -9,16 +9,16 @@ module Main (main) where
 import E2ESpec qualified
 import FoldSpec qualified
 import InvariantsSpec qualified
-import JwkSpec qualified
 import MemberKelServerSpec qualified
 import MemberKelSpec qualified
 import MemberKelStoreSpec qualified
 import MultiClientSpec qualified
 import S28AppApiSpec qualified
+import ServerIdentitySpec qualified
 import ServerSpec qualified
 import StoreInvariantsSpec qualified
 import StoreSpec qualified
-import Test.Hspec (hspec)
+import Test.Hspec (describe, hspec)
 import TransitionInvariantsSpec qualified
 import ValidateSpec qualified
 
@@ -28,13 +28,14 @@ main = hspec $ do
     TransitionInvariantsSpec.spec
     FoldSpec.spec
     ValidateSpec.spec
-    JwkSpec.spec
     MemberKelSpec.spec
     MemberKelStoreSpec.spec
     MemberKelServerSpec.spec
-    StoreSpec.spec
-    StoreInvariantsSpec.spec
-    ServerSpec.spec
-    E2ESpec.spec
-    MultiClientSpec.spec
-    S28AppApiSpec.spec
+    ServerIdentitySpec.spec
+    describe "INV-38-OLD-PATH: the old group path without a server key" $ do
+        StoreSpec.spec
+        StoreInvariantsSpec.spec
+        ServerSpec.spec
+        E2ESpec.spec
+        MultiClientSpec.spec
+        S28AppApiSpec.spec

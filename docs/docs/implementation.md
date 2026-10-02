@@ -1,5 +1,5 @@
 # kelgroups — Implementation Plan
-> Superseded in part: the [security design](security-design.md) replaces the server identity, bootstrap mode and admin voting described here.
+> Superseded in part: the [security design](security-design.md) replaces bootstrap mode and admin voting described here.
 
 ## Nix Setup
 
@@ -15,7 +15,7 @@
 
 - Library depends on `base`, `containers`, `text`, `bytestring`, `sqlite-simple`, `stm`, `aeson`, `http-types`, `wai`, `keri-hs`
 - Executable depends on `kelgroups`, `warp`, `stm`, `text`
-- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm` + `sqlite-simple` + `process` + `network`; it runs the built `kelgroups-server` (`build-tool-depends`)
+- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm` + `sqlite-simple` + `process` + `network` + `memory`; it runs the built `kelgroups-server` (`build-tool-depends`)
 
 ## Library Modules
 
@@ -28,7 +28,7 @@
 | `KelGroups.Validate` | Event validation with `ValidationError` ADT |
 | `KelGroups.Bootstrap` | `AuthMode` detection (bootstrap vs normal) |
 | `KelGroups.Trivial` | Trivial instance: `a = ()`, no app roles |
-| `KelGroups.Store` | SQLite-backed KEL store with KERI events, digest chain, and server identity |
+| `KelGroups.Store` | SQLite-backed KEL store with KERI events and digest chain |
 | `KelGroups.Kel` | Member KELs and the KERI rule on append (`host`, `rotate`, `tip`) |
 | `KelGroups.Kel.Codec` | JSON wire form of signed member KEL events |
 | `KelGroups.Kel.Store` | Member KELs in the server database, re-checked on open |
@@ -112,8 +112,6 @@ data KELStore a = KELStore
   , stateVar :: TVar (GroupState a)
   , tipVar :: TVar (Maybe ChainTip)
   , lengthVar :: TVar Int
-  , serverKeyPair :: KeyPair       -- Ed25519 server identity
-  , serverCesrKey :: Text          -- CESR-encoded server public key
   }
 
 data ChainTip = ChainTip
@@ -130,7 +128,7 @@ chainTip :: KELStore a -> IO (Maybe ChainTip)
 
 Events are stored as KERI canonical JSON (via `serializeEvent` from keri-hs) in SQLite alongside the group event anchor, signer key, signature, and denormalized chain metadata (prefix, sequence number, digest). The in-memory `TVar` state is updated incrementally on each append.
 
-On first `openKEL`, the store generates a server Ed25519 keypair (persisted in a singleton `server_identity` table) and creates an L1 inception event (event 0) signed by the server key. The group identifier is the inception event's SAID (available as `tipPrefix` immediately after open). On subsequent opens, the keypair is loaded from the table and all group events are replayed from the `group_event` column to rebuild in-memory state. The chain tip is recovered from the last row's metadata.
+A fresh store is empty: the server holds no key and creates no event of its own. The first submission becomes the group KEL's inception, and the group identifier is its SAID (`tipPrefix` once it is stored). On subsequent opens all group events are replayed from the `group_event` column to rebuild in-memory state. The chain tip is recovered from the last row's metadata.
 
 ### Server
 
@@ -141,7 +139,7 @@ HTTP interface via warp + wai with JSON encoding (aeson).
 | `/condition` | GET | Current group state + auth mode |
 | `/events?after=N` | GET | First event after sequence number N |
 | `/events` | POST | Submit a `Submission` (signer + signature + priorDigest + event) |
-| `/info` | GET | Public admin emails, pending status, server key, group identifier |
+| `/info` | GET | Public admin emails, pending status, group identifier (none before the first submission) |
 | `/stream` | GET | SSE stream — emits `event: new` with `{"sn":N}` on each append |
 
 **SSE mechanism:** Each client gets a `dupTChan` copy of the broadcast channel. Disconnection is handled by warp (thread dies, TChan is GC'd).

@@ -77,7 +77,6 @@ import KelGroups.Server.JSON
     )
 import KelGroups.Store
     ( ChainTip (..)
-    , KELStore (..)
     , chainTip
     , closeKEL
     , openKEL
@@ -158,8 +157,6 @@ data TestEnv = TestEnv
     , teMgr :: HC.Manager
     , teTip :: IORef (Maybe ChainTip)
     -- ^ Client-side chain tip for KERI event construction
-    , teServerKey :: Text
-    -- ^ CESR-encoded server public key
     }
 
 -- | Spin up a fresh server on a random port for one test.
@@ -176,7 +173,6 @@ withTestEnv action = do
                 , envPassphrase = testPass
                 , envBroadcast = ch
                 }
-        sKey = serverCesrKey store
     mgr <- HC.newManager HC.defaultManagerSettings
     tip <- chainTip store
     tipRef <- newIORef tip
@@ -189,7 +185,6 @@ withTestEnv action = do
                         { tePort = port
                         , teMgr = mgr
                         , teTip = tipRef
-                        , teServerKey = sKey
                         }
             )
     closeKEL store
@@ -431,8 +426,8 @@ instance FromJSON EventResp where
 data InfoResp = InfoResp
     { irEmails :: [Text]
     , irPending :: Bool
-    , irServerKey :: Text
-    , irGroupId :: Text
+    , irGroupId :: Maybe Text
+    -- ^ Prefix of the group KEL; none before the first submission
     }
 
 instance FromJSON InfoResp where
@@ -440,5 +435,4 @@ instance FromJSON InfoResp where
         InfoResp
             <$> o .: "publicAdminEmails"
             <*> o .: "pendingIntroduction"
-            <*> o .: "serverKey"
             <*> o .: "groupId"

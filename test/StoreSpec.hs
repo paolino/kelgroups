@@ -128,8 +128,7 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                 len <- kelLength store
                 closeKEL store
                 gs `shouldBe` emptyState trivialInitial
-                -- Server inception is auto-created
-                len `shouldBe` 1
+                len `shouldBe` 0
 
     describe "roundtrip" $ do
         prop "signers match after append+read" $
@@ -173,9 +172,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                                                 eventDigest
                                                     keriEvt
                                             }
-                        -- Skip server inception (id=1)
                         replayed <-
-                            readEventsFrom store 2
+                            readEventsFrom store 1
                         closeKEL store
                         pure
                             ( map fst events
@@ -299,8 +297,8 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                             , tipDigest =
                                 eventDigest keriEvt
                             }
-            -- Client events at ids 2,3,4; skip first
-            tail' <- readEventsFrom store 3
+            -- Client events at ids 1,2,3; skip first
+            tail' <- readEventsFrom store 2
             closeKEL store
             map seSigner tail'
                 `shouldBe` map fst (drop 1 events)
@@ -338,7 +336,7 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                 tail' `shouldBe` []
 
     describe "kelLength" $ do
-        prop "length matches number of appends + 1" $
+        prop "length matches number of appends" $
             monadicIO $ do
                 events <- pick arbitraryBaseEvents
                 len <- run $
@@ -382,5 +380,4 @@ spec = describe "KelGroups.Store (SQLite)" $ do
                         l <- kelLength store
                         closeKEL store
                         pure l
-                -- +1 for the server inception
-                assert $ len == length events + 1
+                assert $ len == length events

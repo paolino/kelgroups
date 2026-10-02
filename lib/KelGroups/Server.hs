@@ -564,8 +564,6 @@ handleInfo env req respond =
             tip <- chainTip (envStore env)
             let pubEmails = publicAdminEmails gs
                 pending = hasPendingIntro key gs
-                sKey =
-                    serverCesrKey (envStore env)
                 groupId = fmap tipPrefix tip
             respond $
                 responseLBS
@@ -577,8 +575,6 @@ handleInfo env req respond =
                                 .= pubEmails
                             , "pendingIntroduction"
                                 .= pending
-                            , "serverKey"
-                                .= sKey
                             , "groupId"
                                 .= groupId
                             ]

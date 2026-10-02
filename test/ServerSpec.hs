@@ -350,8 +350,8 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                         `shouldBe` status200
                     ar <-
                         decodeOrFail (HC.responseBody resp)
-                    -- Event 2 (server inception is 1)
-                    sequenceNumber ar `shouldBe` 2
+                    -- Event 1
+                    sequenceNumber ar `shouldBe` 1
 
             it "wrong passphrase returns 401" $
                 \ctx -> do
@@ -433,12 +433,12 @@ spec = describe "KelGroups.Server (HTTP)" $ do
                             HC.defaultManagerSettings
                     (sub, admin1) <-
                         postBootstrap mgr ctx
-                    -- after=1 skips server inception (id=1)
+                    -- after=0 is the first event
                     resp <-
                         httpGet
                             mgr
                             ctx
-                            ( "/events?after=1&key="
+                            ( "/events?after=0&key="
                                 <> T.unpack (stKey admin1)
                             )
                     HC.responseStatus resp

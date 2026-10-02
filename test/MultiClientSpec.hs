@@ -52,10 +52,10 @@ scenario1 =
                     irPending info0 `shouldBe` False
 
                     -- 2. Alice bootstraps as PublicAdmin
-                    -- (event 2, server inception is 1)
+                    -- (event 1)
                     sn1 <-
                         postEvent te (bootstrap alice)
-                    sn1 `shouldBe` 2
+                    sn1 `shouldBe` 1
 
                     -- 3. Bob sees Alice's email in admin list
                     info1 <-
@@ -80,7 +80,7 @@ scenario1 =
                         postEvent
                             te
                             (proposeMember alice bob)
-                    sn2 `shouldBe` 3
+                    sn2 `shouldBe` 2
 
                     -- 6. Bob checks /info — already enacted
                     info2 <-
@@ -98,7 +98,7 @@ scenario1 =
                     length (crMembers cBob) `shouldBe` 2
 
                     -- 8. Bob can replay the KEL
-                    -- First event is server inception
+                    -- First event is Alice's bootstrap
                     e0 <-
                         httpGet
                             te
@@ -110,7 +110,7 @@ scenario1 =
                     er0 <-
                         decodeOrFail (HC.responseBody e0)
                     erSigner er0
-                        `shouldBe` teServerKey te
+                        `shouldBe` tidKey alice
 
 -- --------------------------------------------------------
 -- Scenario 2: Multi-admin majority approval

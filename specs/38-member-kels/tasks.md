@@ -8,5 +8,5 @@ C1 `feat: host member KELs with KERI validation on append`
 - [x] T003 M4 endpoints with HTTP checks for A1–A3, IXN-ENDPOINT, FETCH, UNHOSTED; docs section
 
 C2 `feat!: remove the server identity`
-- [ ] T004 M5/M6/M7 deletion (F10); NO-SERVER-KEY checks (A4)
-- [ ] T005 OLD-PATH suite adaptations; docs key-export/implementation
+- [x] T004 M5/M6/M7 deletion (F10); NO-SERVER-KEY checks (A4)
+- [x] T005 OLD-PATH suite adaptations; docs key-export/implementation
