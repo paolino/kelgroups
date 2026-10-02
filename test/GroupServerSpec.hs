@@ -381,7 +381,7 @@ spec = describe "POST /actions" $ modifyMaxSuccess (const 10) $ do
                     , ("extra anchor key", [setKey "x" (Number 1) app])
                     ,
                         ( "unknown payload tag"
-                        , [setKey "payload" (object ["t" .= ("leave" :: Text)]) app]
+                        , [setKey "payload" (object ["t" .= ("promote" :: Text)]) app]
                         )
                     ,
                         ( "genesis with group and prev"

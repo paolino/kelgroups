@@ -92,9 +92,13 @@ test-suite invariants
     FoldSpec
     Generators
     GroupFixtures
+    GroupMembershipServerSpec
+    GroupMembershipSpec
+    GroupMembershipStoreSpec
     GroupServerSpec
     GroupSpec
     GroupStoreSpec
+    GroupWorld
     InvariantsSpec
     MemberKelFixtures
     MemberKelServerSpec
@@ -134,4 +138,5 @@ test-suite invariants
     , stm            >=2.5  && <2.7
     , temporary      >=1.3  && <1.4
     , text           >=2.0  && <2.2
+    , wai            >=3.2  && <3.3
     , warp           >=3.3  && <3.5

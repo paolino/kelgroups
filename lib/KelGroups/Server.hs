@@ -275,6 +275,13 @@ groupRefusalStatus = \case
     NotAMember -> status403
     PrevNotHead -> status409
     GroupExists -> status409
+    NotAnAdmin -> status403
+    MemberNotHosted -> status404
+    AlreadyMember -> status409
+    TargetNotMember -> status409
+    AlreadyAdmin -> status409
+    TargetNotAdmin -> status409
+    LastAdmin -> status409
 
 -- | Stable machine-readable name of a group action refusal.
 groupRefusalName :: GroupRefusal -> Text
@@ -285,6 +292,13 @@ groupRefusalName = \case
     NotAMember -> "notAMember"
     PrevNotHead -> "prevNotHead"
     GroupExists -> "groupExists"
+    NotAnAdmin -> "notAnAdmin"
+    MemberNotHosted -> "memberNotHosted"
+    AlreadyMember -> "alreadyMember"
+    TargetNotMember -> "targetNotMember"
+    AlreadyAdmin -> "alreadyAdmin"
+    TargetNotAdmin -> "targetNotAdmin"
+    LastAdmin -> "lastAdmin"
 
 -- | HTTP status of a refusal (data model D4).
 refusalStatus :: KelRefusal -> Status

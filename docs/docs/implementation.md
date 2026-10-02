@@ -233,13 +233,13 @@ index derived from the admitted interactions, never stored apart.
 
 ```json
 {"payload": {"t": "genesis"}}
-{"group": "<group id>", "prev": "<head digest>", "payload": {"t": "app", "data": <any JSON>}}
+{"group": "<group id>", "prev": "<head digest>", "payload": <payload>}
 ```
 
 A genesis names no group and no `prev`: its group id is the genesis event's own `d`, and its
-signer becomes the sole member and admin. `app` payloads are opaque and leave the roster
-unchanged. The other core payloads (add, remove, grant, revoke, leave) are not decodable yet.
-Any other shape — no anchor, two anchors, an extra key, an unknown payload tag, a genesis with
+signer becomes the sole member and admin. The non-genesis payloads (add, remove, grant,
+revoke, leave, app) are those of the membership section below; `app` data is opaque. Any other
+shape — no anchor, two anchors, an extra key, an unknown payload tag, a genesis with
 `group` or `prev`, a non-genesis without either — is not a group action.
 
 ```haskell
@@ -249,6 +249,7 @@ retried :: Hosted -> SignedEvent -> Maybe Admission
 head :: Chain -> Text
 roster :: Chain -> Roster
 applyCore :: Roster -> Action -> Roster
+membershipOk :: (Text -> Bool) -> Roster -> Action -> Either GroupRefusal ()
 rebuildChains :: Map Text MemberKel -> Either String (Map Text Chain)
 
 admitAction :: MemberKels -> SignedEvent -> IO (Either GroupRefusal Admission)
@@ -256,11 +257,11 @@ lookupChain :: MemberKels -> Text -> IO (Maybe Chain)
 ```
 
 `KelGroups.Group` is pure and uses the Lean model's words (`Action`, `Payload`, `head`,
-`roster`, `applyCore`, `admit`; `Hosted` is the model's `State`). `admit` applies the KEL rule
+`roster`, `applyCore`, `guardOk`, `membershipOk`, `admit`; `Hosted` is the model's `State`). `admit` applies the KEL rule
 for an interaction to the signer's hosted KEL, then the group conditions: a genesis needs an
 unused group id; any other action needs an existing group, a signer who is a current member,
-and `prev` equal to the head. An admitted action is appended to the signer's KEL and to its
-group's chain in one step.
+`prev` equal to the head, and the membership rule (below). An admitted action is appended to
+the signer's KEL and to its group's chain in one step.
 
 `KelGroups.Kel.Store` admits under the same lock as `POST /kel`, so a rotation and an action
 of one member never interleave. The KELs and chains are one in-memory value: an admission is
@@ -270,7 +271,7 @@ the group head both advanced or both unchanged. A submission whose event and sig
 already in the signer's KEL is a retry: it answers the original success body and stores
 nothing. Opening the database rebuilds every chain from the hosted KELs and refuses to open if
 an interaction is not a group action, or a group is not one `prev`-linked line from its genesis
-whose every signer was a member at its position.
+whose every action meets the group conditions, membership rule included, at its position.
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -278,7 +279,7 @@ whose every signer was a member at its position.
 
 Checks run in this order and the first failure decides the answer: decode, retry, signer
 hosted, the KEL rule (SAID, `i`/`p`/`s` against the tip, signatures), then the group
-conditions. A refusal stores nothing.
+conditions, then the membership rule. A refusal stores nothing.
 
 | Refusal | Status | `error` |
 |---|---|---|
@@ -292,6 +293,62 @@ conditions. A refusal stores nothing.
 
 A refused action is void: the member re-reads its tip and the head and signs again. A write
 failure answers 500 and stores nothing.
+
+### Membership
+
+Membership is the replay of a group's chain in admission order (`roster`, `applyCore`, as in
+the Lean model `KelGroups.Sovereign.Membership`):
+
+| Payload | Effect on the roster |
+|---|---|
+| `{"t": "genesis"}` | the signer is the sole member and admin |
+| `{"t": "add", "member": x}` | `x` is a member |
+| `{"t": "remove", "member": x}` | `x` is neither member nor admin |
+| `{"t": "grant", "member": x}` | `x` is an admin |
+| `{"t": "revoke", "member": x}` | `x` is not an admin |
+| `{"t": "leave"}` | the signer is neither member nor admin |
+| `{"t": "app", "data": d}` | unchanged |
+
+`x` is a member KEL prefix, a JSON string; a membership payload with a missing or extra key or
+a non-string member is not a group action. Every non-genesis payload travels in the
+non-genesis anchor (`group`, `prev`, `payload`).
+
+```haskell
+guardOk :: Roster -> Bool
+membershipOk :: (Text -> Bool) -> Roster -> Action -> Either GroupRefusal ()
+```
+
+`membershipOk` (Lean `membershipOk`) is the last admission condition, checked against the
+roster before the action, after the signer is found a current member and `prev` the head:
+
+- add, remove, grant and revoke are signed by an admin;
+- an added identity has a hosted KEL and is not a member;
+- a removed or granted identity is a member, a granted one not yet an admin;
+- a revoked identity is an admin;
+- leave and app need nothing more;
+- for every payload, the last-admin guard (Lean `guardOk`): after the action the roster has
+  no members, or has an admin.
+
+So the last admin cannot leave, revoke itself or remove itself while other members remain; as
+the sole member it may leave (or remove itself), which empties the group, but never revoke
+itself. A removed or departed member's earlier actions stay in the chain; its later actions are
+refused as from a non-member, and it may be added again. Every admitted chain therefore has
+no members or an admin, and every admin is a member (Lean `admin_guard`).
+
+Opening the database applies the same conditions to every rebuilt action at its position, a
+KEL counting as hosted when it is stored; a stored interaction that breaks them refuses the
+open.
+
+The checks after the group conditions of `POST /actions` run in this order, the first failure
+deciding: signer an admin, added identity hosted, target state, last-admin guard.
+
+| Refusal | Status | `error` |
+|---|---|---|
+| add, remove, grant or revoke by a member who is no admin | 403 | `notAnAdmin` |
+| add of an identity whose KEL is not hosted | 404 | `memberNotHosted` |
+| add of a member; remove or grant of a non-member | 409 | `alreadyMember`, `targetNotMember` |
+| grant of an admin; revoke of a non-admin | 409 | `alreadyAdmin`, `targetNotAdmin` |
+| the action would leave members and no admin | 409 | `lastAdmin` |
 
 ## Lean 4 Proofs
 

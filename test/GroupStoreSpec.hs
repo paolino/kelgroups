@@ -13,7 +13,12 @@ file: concurrency, retry, atomicity under write failures and
 asynchronous exceptions, frame, stale actions after a rotation
 and the chain rebuild on open.
 -}
-module GroupStoreSpec (spec) where
+module GroupStoreSpec
+    ( spec
+    , withKels
+    , insertRow
+    , memberTable
+    ) where
 
 import Control.Concurrent (forkFinally, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently, mapConcurrently)

@@ -11,8 +11,11 @@ by the current keys of a member KEL fixture.
 module GroupFixtures
     ( -- * Anchors (data model D1)
       genesisAnchor
+    , actionAnchor
     , appAnchor
     , appPayload
+    , memberPayload
+    , leavePayload
     , genAppData
     , genNumericData
     , respellNumbers
@@ -55,10 +58,21 @@ genesisAnchor = object ["payload" .= object ["t" .= ("genesis" :: Text)]]
 appPayload :: Value -> Value
 appPayload d = object ["t" .= ("app" :: Text), "data" .= d]
 
+-- | @{"t": t, "member": x}@: an add, remove, grant or revoke of @x@.
+memberPayload :: Text -> Text -> Value
+memberPayload t x = object ["t" .= t, "member" .= x]
+
+-- | @{"t": "leave"}@.
+leavePayload :: Value
+leavePayload = object ["t" .= ("leave" :: Text)]
+
+-- | @{"group": g, "prev": h, "payload": pl}@.
+actionAnchor :: Text -> Text -> Value -> Value
+actionAnchor g h pl = object ["group" .= g, "prev" .= h, "payload" .= pl]
+
 -- | @{"group": g, "prev": h, "payload": {"t": "app", "data": d}}@.
 appAnchor :: Text -> Text -> Value -> Value
-appAnchor g h d =
-    object ["group" .= g, "prev" .= h, "payload" .= appPayload d]
+appAnchor g h d = actionAnchor g h (appPayload d)
 
 -- | Small application data.
 genAppData :: Gen Value
