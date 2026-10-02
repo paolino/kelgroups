@@ -1,0 +1,1556 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://paolino.github.io/kelgroups/implementation/">
+      
+      
+        <link rel="prev" href="../security-design/">
+      
+      
+        <link rel="next" href="../key-export/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Implementation - kelgroups</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#kelgroups-implementation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="kelgroups" class="md-header__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            kelgroups
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Implementation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="kelgroups" class="md-nav__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    kelgroups
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nix-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nix Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cabal-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cabal Package
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Library Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#member-kels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Member KELs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#membership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Membership
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group index
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lean-4-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lean 4 Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#justfile-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Justfile Recipes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../key-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nix-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nix Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cabal-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cabal Package
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#library-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Library Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#member-kels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Member KELs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#membership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Membership
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group index
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lean-4-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lean 4 Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#justfile-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Justfile Recipes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="kelgroups-implementation">kelgroups — Implementation</h1>
+<h2 id="nix-setup">Nix Setup</h2>
+<ul>
+<li><strong>haskell.nix</strong> with GHC 9.8.4</li>
+<li><a href="https://github.com/paolino/keri-hs">keri-hs</a> as flake input (KERI events, CESR encoding, Ed25519 crypto, KEL primitives)</li>
+<li><a href="https://github.com/paolino/keri-purs">keri-purs</a> as spago git dependency (PureScript KERI events, CESR, Ed25519, KEL replay)</li>
+<li><a href="https://github.com/paolino/keri-lean">keri-lean</a> as lake git dependency (generic KERI types for Lean proofs)</li>
+<li>Dev shell includes: cabal, fourmolu, hlint, hoogle, cabal-fmt, just, lean4, mkdocs, purescript, spago</li>
+</ul>
+<h2 id="cabal-package">Cabal Package</h2>
+<p><strong><code>kelgroups.cabal</code></strong> — library + test suite + executable:</p>
+<ul>
+<li>Library depends on <code>base</code>, <code>containers</code>, <code>text</code>, <code>bytestring</code>, <code>sqlite-simple</code>, <code>stm</code>, <code>aeson</code>, <code>http-types</code>, <code>wai</code>, <code>keri-hs</code></li>
+<li>Executable depends on <code>kelgroups</code>, <code>warp</code>, <code>wai-app-static</code></li>
+<li>Test suite uses <code>hspec</code> + <code>QuickCheck</code> + <code>temporary</code> + <code>directory</code> + <code>warp</code> + <code>wai</code> + <code>http-client</code> + <code>http-types</code> + <code>aeson</code> + <code>async</code> + <code>sqlite-simple</code> + <code>process</code> + <code>network</code> + <code>memory</code>; it runs the built <code>kelgroups-server</code> (<code>build-tool-depends</code>)</li>
+</ul>
+<h2 id="library-modules">Library Modules</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KelGroups.Kel</code></td>
+<td>Member KELs and the KERI rule on append (<code>host</code>, <code>rotate</code>, <code>tip</code>)</td>
+</tr>
+<tr>
+<td><code>KelGroups.Kel.Codec</code></td>
+<td>JSON wire form of signed member KEL events</td>
+</tr>
+<tr>
+<td><code>KelGroups.Kel.Store</code></td>
+<td>The database file: member KELs, re-checked on open; group action admission</td>
+</tr>
+<tr>
+<td><code>KelGroups.Group</code></td>
+<td>Group actions, chains, membership and their admission (<code>admit</code>, <code>head</code>, <code>roster</code>, <code>membershipOk</code>)</td>
+</tr>
+<tr>
+<td><code>KelGroups.Server</code></td>
+<td>WAI application: <code>POST /kel</code>, <code>GET /kel/&lt;prefix&gt;[?after=&lt;sn&gt;]</code>, <code>POST /actions</code>, <code>GET /groups/&lt;gid&gt;</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.Vote.Types</code>, <code>KelGroups.Vote.State</code></td>
+<td>Held app-scoped proposal substrate; used by nothing in the server</td>
+</tr>
+</tbody>
+</table>
+<h3 id="server">Server</h3>
+<p><code>kelApp</code> routes <code>POST /kel</code>, <code>GET /kel/&lt;prefix&gt;</code>, <code>POST /actions</code> and <code>GET /groups/&lt;gid&gt;</code>
+(below). An unmatched GET or
+HEAD goes to an optional fallback application; any other unmatched request answers 404. The
+removed group path (<code>POST /events</code>, <code>GET /events</code>, <code>GET /condition</code>, <code>GET /stream</code>, <code>GET /info</code>,
+the <code>?key=</code> guard) answers 404.</p>
+<p><strong>Executable:</strong> <code>kelgroups-server &lt;port&gt; &lt;db&gt;</code> — opens the member KEL store on the database
+file and runs warp serving <code>kelApp</code>, with the static client files
+(<code>client/kelgroups-trivial/dist</code>) as the fallback. Any other command line prints the usage and
+exits.</p>
+<h3 id="member-kels">Member KELs</h3>
+<p>Each member's own KEL is hosted by the server. A member submits its inception and its
+rotations; anyone can fetch the KEL. The server checks the KERI rule on every append, requires
+a next-key commitment, and admits a rotation on KERI validity alone: no group condition is
+consulted and no group state changes.</p>
+<div class="highlight"><pre><span></span><code><span class="nf">host</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">KelRefusal</span><span class="w"> </span><span class="kt">MemberKel</span>
+<span class="nf">rotate</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">KelRefusal</span><span class="w"> </span><span class="kt">MemberKel</span>
+<span class="nf">appendInteraction</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">KelRefusal</span><span class="w"> </span><span class="kt">MemberKel</span>
+<span class="nf">tip</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span>
+<span class="nf">currentKeys</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="p">([</span><span class="kt">Text</span><span class="p">],</span><span class="w"> </span><span class="kt">Int</span><span class="p">)</span>
+
+<span class="nf">openMemberKels</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">FilePath</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="kt">MemberKels</span>
+<span class="nf">closeMemberKels</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKels</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="nb">()</span>
+<span class="nf">submitMemberEvent</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKels</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">Either</span><span class="w"> </span><span class="kt">KelRefusal</span><span class="w"> </span><span class="kt">MemberKel</span><span class="p">)</span>
+<span class="nf">lookupMemberKel</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKels</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">MemberKel</span><span class="p">)</span>
+</code></pre></div>
+<p>The rule (<code>KelGroups.Kel</code>, pure, over keri-hs events) accepts an event only if:</p>
+<ul>
+<li>its <code>d</code> is its SAID; an inception's <code>i</code> equals its <code>d</code> and its <code>s</code> is 0;</li>
+<li>a rotation or interaction extends the tip: <code>i</code> is the KEL prefix, <code>p</code> the digest of the last
+  event, <code>s</code> the last <code>s</code> + 1;</li>
+<li>inception and rotation commit to next keys (<code>n</code> non-empty, 1 &lt;= <code>nt</code> &lt;= |<code>n</code>|) and have
+  1 &lt;= <code>kt</code> &lt;= |<code>k</code>|; a rotation's <code>k</code> is exactly the previous establishment event's
+  commitment, key by key;</li>
+<li>its indexed signatures, over the keri-hs canonical serialization, are valid, at distinct
+  indices, and meet the threshold of the controlling keys: an inception and a rotation its own
+  <code>k</code>/<code>kt</code> (a rotation also the prior <code>nt</code> over the same revealed keys), an interaction the
+  current keys;</li>
+<li>it has no witnesses.</li>
+</ul>
+<p><code>Keri.Kel.Append</code> is not used: it checks a rotation against the prior keys and does not require
+a next-key commitment.</p>
+<p><code>KelGroups.Kel.Store</code> opens the database file itself and keeps one row per event in its
+<code>member_kel_events</code> table (prefix, sequence number, canonical event bytes, signatures, digest;
+unique on prefix and sequence number); it creates no other table and neither reads nor drops
+any other table the file holds. A submission is decided under an append lock: a refusal writes
+nothing; an acceptance is one INSERT, and memory is updated after it commits. Opening the
+database replays every stored KEL through the rule and refuses to open on a violation.
+Interactions are group actions, admitted only through <code>POST /actions</code> (below).</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/kel</code></td>
+<td>POST</td>
+<td>Submit an inception or a rotation; 200 <code>{"prefix", "sn", "digest"}</code></td>
+</tr>
+<tr>
+<td><code>/kel/&lt;prefix&gt;</code></td>
+<td>GET</td>
+<td>The hosted KEL, oldest first, each event with its signatures; 404 if unhosted</td>
+</tr>
+<tr>
+<td><code>/kel/&lt;prefix&gt;?after=&lt;sn&gt;</code></td>
+<td>GET</td>
+<td>The hosted events with <code>s</code> &gt; <code>sn</code>, oldest first (<code>[]</code> past the tip); 400 <code>badQuery</code> unless <code>sn</code> is a canonical non-negative decimal (checked before the lookup); 404 if unhosted</td>
+</tr>
+</tbody>
+</table>
+<p>Wire form of a signed event, the POST body and each element of the GET array:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"v"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"t"</span><span class="p">:</span><span class="w"> </span><span class="s2">"icp"</span><span class="p">,</span><span class="w"> </span><span class="nt">"d"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"i"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"s"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"k"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"..."</span><span class="p">],</span>
+<span class="w">           </span><span class="nt">"nt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"n"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"..."</span><span class="p">],</span><span class="w"> </span><span class="nt">"bt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0"</span><span class="p">,</span><span class="w"> </span><span class="nt">"b"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"c"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"a"</span><span class="p">:</span><span class="w"> </span><span class="p">[]},</span>
+<span class="w"> </span><span class="nt">"signatures"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"signature"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0B..."</span><span class="p">}]}</span>
+</code></pre></div>
+<p>The event carries exactly the labels keri-hs serializes for its kind, <code>s</code> in hexadecimal and the
+thresholds in decimal; the GET array returns each event in that canonical byte form.</p>
+<table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Status</th>
+<th><code>error</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>body or event not decodable</td>
+<td>400</td>
+<td><code>notDecodable</code></td>
+</tr>
+<tr>
+<td>interaction or receipt at <code>POST /kel</code></td>
+<td>422</td>
+<td><code>unexpectedEventKind</code></td>
+</tr>
+<tr>
+<td>SAID mismatch, <code>i</code> != <code>d</code>, inception <code>s</code> not 0</td>
+<td>422</td>
+<td><code>saidMismatch</code>, <code>prefixNotSaid</code>, <code>inceptionNotFirst</code></td>
+</tr>
+<tr>
+<td>no next-key commitment, threshold out of range, witnesses</td>
+<td>422</td>
+<td><code>missingNextCommitment</code>, <code>thresholdOutOfRange</code>, <code>witnessesPresent</code></td>
+</tr>
+<tr>
+<td>rotation not revealing the committed keys</td>
+<td>422</td>
+<td><code>commitmentNotRevealed</code></td>
+</tr>
+<tr>
+<td>signatures invalid or under threshold</td>
+<td>422</td>
+<td><code>invalidSignatures</code></td>
+</tr>
+<tr>
+<td>rotation for an unhosted prefix</td>
+<td>404</td>
+<td><code>unhosted</code></td>
+</tr>
+<tr>
+<td>inception of a hosted prefix; <code>p</code>/<code>s</code> not the tip's successor</td>
+<td>409</td>
+<td><code>alreadyHosted</code>, <code>notTipSuccessor</code></td>
+</tr>
+</tbody>
+</table>
+<p>Refusal bodies are <code>{"error": &lt;class&gt;, "detail": &lt;text&gt;}</code>.</p>
+<p>Other query keys of <code>GET /kel/&lt;prefix&gt;</code> are ignored. A client that already holds a validated KEL
+up to <code>sn</code> fetches only <code>?after=&lt;sn&gt;</code> and checks that the answer extends its tip.</p>
+<h3 id="group-actions">Group actions</h3>
+<p>A group action is an interaction event (<code>ixn</code>) in the signer's hosted KEL whose <code>a</code> holds
+exactly one group anchor. The signer is the event's <code>i</code>, its KEL link the event's <code>p</code>; the
+anchor names the group, the payload and <code>prev</code>, the digest of the group head the action
+extends. The group chain is nothing but those <code>prev</code> links; the server's per-group head is an
+index derived from the admitted interactions, never stored apart.</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"payload"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"t"</span><span class="p">:</span><span class="w"> </span><span class="s2">"genesis"</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"group"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;group id&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prev"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;head digest&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"payload"</span><span class="p">:</span><span class="w"> </span><span class="err">&lt;payload&gt;</span><span class="p">}</span>
+</code></pre></div>
+<p>A genesis names no group and no <code>prev</code>: its group id is the genesis event's own <code>d</code>, and its
+signer becomes the sole member and admin. The non-genesis payloads (add, remove, grant,
+revoke, leave, app) are those of the membership section below; <code>app</code> data is opaque. Any other
+shape — no anchor, two anchors, an extra key, an unknown payload tag, a genesis with
+<code>group</code> or <code>prev</code>, a non-genesis without either — is not a group action.</p>
+<div class="highlight"><pre><span></span><code><span class="nf">decodeAction</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">GroupRefusal</span><span class="w"> </span><span class="kt">Action</span>
+<span class="nf">admit</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Hosted</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">GroupRefusal</span><span class="w"> </span><span class="p">(</span><span class="kt">Hosted</span><span class="p">,</span><span class="w"> </span><span class="kt">Admission</span><span class="p">)</span>
+<span class="nf">retried</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Hosted</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Admission</span>
+<span class="nf">head</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Chain</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span>
+<span class="nf">roster</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Chain</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Roster</span>
+<span class="nf">applyCore</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Roster</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Action</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Roster</span>
+<span class="nf">membershipOk</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="p">(</span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Roster</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Action</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">GroupRefusal</span><span class="w"> </span><span class="nb">()</span>
+<span class="nf">rebuildChains</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="kt">MemberKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="p">(</span><span class="kt">Map</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="kt">Chain</span><span class="p">)</span>
+
+<span class="nf">admitAction</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKels</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">Either</span><span class="w"> </span><span class="kt">GroupRefusal</span><span class="w"> </span><span class="kt">Admission</span><span class="p">)</span>
+<span class="nf">lookupChain</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKels</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">Chain</span><span class="p">)</span>
+</code></pre></div>
+<p><code>KelGroups.Group</code> is pure and uses the Lean model's words (<code>Action</code>, <code>Payload</code>, <code>head</code>,
+<code>roster</code>, <code>applyCore</code>, <code>guardOk</code>, <code>membershipOk</code>, <code>admit</code>; <code>Hosted</code> is the model's <code>State</code>). <code>admit</code> applies the KEL rule
+for an interaction to the signer's hosted KEL, then the group conditions: a genesis needs an
+unused group id; any other action needs an existing group, a signer who is a current member,
+<code>prev</code> equal to the head, and the membership rule (below). An admitted action is appended to
+the signer's KEL and to its group's chain in one step.</p>
+<p><code>KelGroups.Kel.Store</code> admits under the same lock as <code>POST /kel</code>, so a rotation and an action
+of one member never interleave. The KELs and chains are one in-memory value: an admission is
+one INSERT of the interaction row, then that value is replaced, both under
+<code>uninterruptibleMask_</code>, so a write failure or an asynchronous exception leaves the KEL tip and
+the group head both advanced or both unchanged. A submission whose event and signatures are
+already in the signer's KEL is a retry: it answers the original success body and stores
+nothing. Opening the database rebuilds every chain from the hosted KELs and refuses to open if
+an interaction is not a group action, or a group is not one <code>prev</code>-linked line from its genesis
+whose every action meets the group conditions, membership rule included, at its position.</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/actions</code></td>
+<td>POST</td>
+<td>Admit a signed group action (wire form of <code>POST /kel</code>); 200 <code>{"group", "head", "prefix", "sn"}</code>, the same body for an identical retry</td>
+</tr>
+</tbody>
+</table>
+<p>Checks run in this order and the first failure decides the answer: decode, retry, signer
+hosted, the KEL rule (SAID, <code>i</code>/<code>p</code>/<code>s</code> against the tip, signatures), then the group
+conditions, then the membership rule. A refusal stores nothing.</p>
+<table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Status</th>
+<th><code>error</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>body or event not decodable</td>
+<td>400</td>
+<td><code>notDecodable</code></td>
+</tr>
+<tr>
+<td>not exactly one well-formed group anchor</td>
+<td>400</td>
+<td><code>notAGroupAction</code></td>
+</tr>
+<tr>
+<td>not an interaction</td>
+<td>422</td>
+<td><code>unexpectedEventKind</code></td>
+</tr>
+<tr>
+<td>SAID mismatch; signatures invalid or under threshold</td>
+<td>422</td>
+<td><code>saidMismatch</code>, <code>invalidSignatures</code></td>
+</tr>
+<tr>
+<td>signer not hosted; group id with no chain</td>
+<td>404</td>
+<td><code>unhosted</code>, <code>noSuchGroup</code></td>
+</tr>
+<tr>
+<td>signer not a current member</td>
+<td>403</td>
+<td><code>notAMember</code></td>
+</tr>
+<tr>
+<td><code>p</code>/<code>s</code> not the tip's successor; <code>prev</code> not the head; genesis of an existing id</td>
+<td>409</td>
+<td><code>notTipSuccessor</code>, <code>prevNotHead</code>, <code>groupExists</code></td>
+</tr>
+</tbody>
+</table>
+<p>A refused action is void: the member re-reads its tip and the head and signs again. A write
+failure answers 500 and stores nothing.</p>
+<h3 id="membership">Membership</h3>
+<p>Membership is the replay of a group's chain in admission order (<code>roster</code>, <code>applyCore</code>, as in
+the Lean model <code>KelGroups.Sovereign.Membership</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Payload</th>
+<th>Effect on the roster</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{"t": "genesis"}</code></td>
+<td>the signer is the sole member and admin</td>
+</tr>
+<tr>
+<td><code>{"t": "add", "member": x}</code></td>
+<td><code>x</code> is a member</td>
+</tr>
+<tr>
+<td><code>{"t": "remove", "member": x}</code></td>
+<td><code>x</code> is neither member nor admin</td>
+</tr>
+<tr>
+<td><code>{"t": "grant", "member": x}</code></td>
+<td><code>x</code> is an admin</td>
+</tr>
+<tr>
+<td><code>{"t": "revoke", "member": x}</code></td>
+<td><code>x</code> is not an admin</td>
+</tr>
+<tr>
+<td><code>{"t": "leave"}</code></td>
+<td>the signer is neither member nor admin</td>
+</tr>
+<tr>
+<td><code>{"t": "app", "data": d}</code></td>
+<td>unchanged</td>
+</tr>
+</tbody>
+</table>
+<p><code>x</code> is a member KEL prefix, a JSON string; a membership payload with a missing or extra key or
+a non-string member is not a group action. Every non-genesis payload travels in the
+non-genesis anchor (<code>group</code>, <code>prev</code>, <code>payload</code>).</p>
+<div class="highlight"><pre><span></span><code><span class="nf">guardOk</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Roster</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span>
+<span class="nf">membershipOk</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="p">(</span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Bool</span><span class="p">)</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Roster</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Action</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">GroupRefusal</span><span class="w"> </span><span class="nb">()</span>
+</code></pre></div>
+<p><code>membershipOk</code> (Lean <code>membershipOk</code>) is the last admission condition, checked against the
+roster before the action, after the signer is found a current member and <code>prev</code> the head:</p>
+<ul>
+<li>add, remove, grant and revoke are signed by an admin;</li>
+<li>an added identity has a hosted KEL and is not a member;</li>
+<li>a removed or granted identity is a member, a granted one not yet an admin;</li>
+<li>a revoked identity is an admin;</li>
+<li>leave and app need nothing more;</li>
+<li>for every payload, the last-admin guard (Lean <code>guardOk</code>): after the action the roster has
+  no members, or has an admin.</li>
+</ul>
+<p>So the last admin cannot leave, revoke itself or remove itself while other members remain; as
+the sole member it may leave (or remove itself), which empties the group, but never revoke
+itself. A removed or departed member's earlier actions stay in the chain; its later actions are
+refused as from a non-member, and it may be added again. Every admitted chain therefore has
+no members or an admin, and every admin is a member (Lean <code>admin_guard</code>).</p>
+<p>Opening the database applies the same conditions to every rebuilt action at its position, a
+KEL counting as hosted when it is stored; a stored interaction that breaks them refuses the
+open.</p>
+<p>The checks after the group conditions of <code>POST /actions</code> run in this order, the first failure
+deciding: signer an admin, added identity hosted, target state, last-admin guard.</p>
+<table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Status</th>
+<th><code>error</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>add, remove, grant or revoke by a member who is no admin</td>
+<td>403</td>
+<td><code>notAnAdmin</code></td>
+</tr>
+<tr>
+<td>add of an identity whose KEL is not hosted</td>
+<td>404</td>
+<td><code>memberNotHosted</code></td>
+</tr>
+<tr>
+<td>add of a member; remove or grant of a non-member</td>
+<td>409</td>
+<td><code>alreadyMember</code>, <code>targetNotMember</code></td>
+</tr>
+<tr>
+<td>grant of an admin; revoke of a non-admin</td>
+<td>409</td>
+<td><code>alreadyAdmin</code>, <code>targetNotAdmin</code></td>
+</tr>
+<tr>
+<td>the action would leave members and no admin</td>
+<td>409</td>
+<td><code>lastAdmin</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="group-index">Group index</h3>
+<p><code>GET /groups/&lt;gid&gt;</code> tells a reader where a group's history lies: the head and, sorted by prefix
+without duplicates, every identity that signed an action of the group or was the target of an
+<code>add</code>, former members included, each with the tip of its KEL. It is derived in memory from the
+chain and the KELs of one committed state (<code>groupIndex</code>, <code>lookupGroup</code>); nothing is stored for
+it. It is not evidence: a reader fetches the KELs it names and re-checks everything.</p>
+<div class="highlight"><pre><span></span><code><span class="nf">groupIndex</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="kt">MemberKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Chain</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupIndex</span>
+<span class="nf">lookupGroup</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">MemberKels</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Text</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">IO</span><span class="w"> </span><span class="p">(</span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">GroupIndex</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"head"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;digest&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kels"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"prefix"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;prefix&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"tip"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;digest&gt;"</span><span class="p">}]}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Status</th>
+<th><code>error</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>no group has this id</td>
+<td>404</td>
+<td><code>noSuchGroup</code></td>
+</tr>
+</tbody>
+</table>
+<p>The read endpoints (<code>GET /kel/&lt;prefix&gt;</code>, <code>?after=</code>, <code>GET /groups/&lt;gid&gt;</code>) are open to anyone;
+reads for current members only are not implemented yet.</p>
+<h2 id="client">Client</h2>
+<p>The PureScript client (<code>client/kelgroups-client</code>) holds no trust in the server: it fetches every
+member KEL of a group, re-checks each with the server's KERI rule, replays the group from the KELs
+alone, and signs only against a view that a sync produced without refusal. Two clients with the same
+KELs see the same group, whatever order the KELs arrive in.</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KelGroups.Client.Kel</code></td>
+<td>The wire form of a signed event and the KERI rule of <code>KelGroups.Kel</code> (<code>validateKel</code>, <code>extendKel</code>)</td>
+</tr>
+<tr>
+<td><code>KelGroups.Client.Group</code></td>
+<td>Lean vocabulary (<code>Payload</code>, <code>Action</code>, <code>Roster</code>, <code>applyCore</code>, <code>roster</code>, <code>guardOk</code>, <code>membershipOk</code>), anchor wire form, <code>replayGroup</code>, <code>signAction</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.Client.Sync</code></td>
+<td>The <code>Transport</code>, <code>sync</code> and refresh, <code>submit</code> with identical resend, <code>act</code> (sign, submit, re-sign on a stale head or tip)</td>
+</tr>
+<tr>
+<td><code>KelGroups.Client.Api</code></td>
+<td><code>httpTransport</code>: <code>GET /groups/&lt;gid&gt;</code>, <code>GET /kel/&lt;prefix&gt;[?after=&lt;sn&gt;]</code>, <code>POST /actions</code> over <code>fetch</code></td>
+</tr>
+<tr>
+<td><code>KelGroups.Client.Jwk</code></td>
+<td>Ed25519 key export and import as JWK</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><span class="nf">validateKel</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Array</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">SyncRefusal</span><span class="w"> </span><span class="kt">ValidatedKel</span>
+<span class="nf">extendKel</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">ValidatedKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Array</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">SyncRefusal</span><span class="w"> </span><span class="kt">ValidatedKel</span>
+<span class="nf">replayGroup</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">GroupId</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Digest</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Map</span><span class="w"> </span><span class="kt">Prefix</span><span class="w"> </span><span class="kt">ValidatedKel</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">SyncRefusal</span><span class="w"> </span><span class="kt">GroupView</span>
+<span class="nf">signAction</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Signer</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupView</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Payload</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Either</span><span class="w"> </span><span class="kt">SyncRefusal</span><span class="w"> </span><span class="kt">SignedEvent</span>
+<span class="nf">sync</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Transport</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupId</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Maybe</span><span class="w"> </span><span class="kt">GroupView</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Aff</span><span class="w"> </span><span class="p">(</span><span class="kt">Either</span><span class="w"> </span><span class="kt">SyncRefusal</span><span class="w"> </span><span class="kt">GroupView</span><span class="p">)</span>
+<span class="nf">submit</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Transport</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">SignedEvent</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Aff</span><span class="w"> </span><span class="kt">Submission</span>
+<span class="nf">act</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">Transport</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Signer</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">GroupView</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Payload</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Aff</span><span class="w"> </span><span class="p">(</span><span class="kt">Either</span><span class="w"> </span><span class="kt">SyncRefusal</span><span class="w"> </span><span class="kt">Submission</span><span class="p">)</span>
+<span class="nf">httpTransport</span><span class="w"> </span><span class="ow">::</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="ow">-&gt;</span><span class="w"> </span><span class="kt">Transport</span>
+</code></pre></div>
+<p><strong>Validation.</strong> Every fetched KEL is checked event by event with the rule of
+<a href="#member-kels">Member KELs</a>: SAID, inception prefix and <code>s</code>, tip succession, next-key commitment,
+thresholds, no witnesses, revealed commitments, signatures at distinct indices of canonical keys
+meeting the threshold (a rotation also the prior <code>nt</code>). A failure refuses the sync as
+<code>KelInvalid {prefix, s, reason}</code>, the reason being the server's refusal class. An event whose <code>s</code> is
+past the successor of the tip while its <code>p</code> is not the tip, or a first event that is no inception
+past <code>s</code> 0, means events are missing: <code>Gap {missing: &lt;its p&gt;}</code>. An interaction that is not exactly
+one group anchor refuses its KEL (<code>notAGroupAction</code>).</p>
+<p><strong>Walk and fold.</strong> From the index head, every <code>prev</code> is looked up among the group actions of the
+validated KELs back to the genesis whose <code>d</code> is the group id (Lean <code>ChainLine</code>); actions that extend
+the head are followed to the end of the line. A digest found nowhere is a <code>Gap</code>; an action of the
+group off that one line, a second action on one <code>prev</code>, or a <code>prev</code> (or head) in another group is
+<code>NotOnLine</code> (the smallest such digest). The roster is Lean <code>roster</code> over the line; each action must
+meet the group conditions of admission at its position (a current member signs, <code>membershipOk</code>, an
+added identity counting as hosted when its KEL is among the validated ones), else
+<code>RuleViolation {digest, class}</code> with the server's class. The result is a <code>GroupView</code>: group, head,
+chain, roster and the validated KELs.</p>
+<p><strong>Sync and refresh.</strong> <code>sync</code> reads the group index, fetches every KEL it names (an empty answer counts
+as absent) and replays. A KEL must validate as the prefix it was fetched for, and the index must name
+each prefix once; otherwise the sync is refused, so no answer can stand in for another KEL. With a previous view it refreshes: a KEL whose tip did not move is kept, a
+moved one is fetched as <code>?after=&lt;local s&gt;</code> only and must extend the local tip and pass the rule, else
+<code>HistoryRewritten {prefix, s}</code>; a new prefix is fetched whole; a known prefix the index no longer
+names is kept. Validated history is never fetched again. A failed or refused read is
+<code>Transport {status, detail}</code>; no refusal yields a view.</p>
+<p><strong>Signing and retry.</strong> <code>signAction</code> signs an interaction on the signer's validated tip (<code>p</code>) whose
+anchor extends the view head (<code>prev</code>), with the signer's key at its index among the current keys;
+a signer whose KEL is not in the view, or whose key is not current, signs nothing (<code>NotSigner</code>).
+<code>submit</code> posts it and, when no answer arrives, resends the identical bytes (three attempts in all);
+the server answers an identical resend as its admission, so the action lands once. <code>act</code> signs,
+submits and, on a 409 <code>prevNotHead</code> or <code>notTipSuccessor</code>, refreshes, re-validates and signs again
+against the new head and tip (five rounds at most); any refusal of the refresh stops it with nothing
+more sent. An answer changes nothing locally: an own action becomes history (usable as <code>p</code>, counted
+in the view) only once a later sync sees it in the server's KEL and on the chain.</p>
+<table>
+<thead>
+<tr>
+<th><code>SyncRefusal</code></th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KelInvalid {prefix, s, reason}</code></td>
+<td>a fetched KEL breaks the KERI rule, or holds a non-group interaction</td>
+</tr>
+<tr>
+<td><code>Gap {missing}</code></td>
+<td>a digest the walk or a KEL needs is nowhere in the fetched KELs</td>
+</tr>
+<tr>
+<td><code>NotOnLine {digest}</code></td>
+<td>an action of the group is on no single line from its genesis</td>
+</tr>
+<tr>
+<td><code>RuleViolation {digest, class}</code></td>
+<td>an action breaks the group conditions at its position</td>
+</tr>
+<tr>
+<td><code>HistoryRewritten {prefix, s}</code></td>
+<td>a refreshed suffix does not extend the local tip or breaks the rule</td>
+</tr>
+<tr>
+<td><code>NotSigner {prefix}</code></td>
+<td>no usable signing key for the view</td>
+</tr>
+<tr>
+<td><code>Transport {status, detail}</code></td>
+<td>a read failed or was refused</td>
+</tr>
+</tbody>
+</table>
+<p><code>client/kelgroups-trivial</code> is a read-only group viewer over <code>sync</code> and <code>httpTransport</code>: a group id,
+then the head, the roster and the chain, or the refusal with its missing digest. It holds no key;
+signing and key custody are not part of it.</p>
+<p>Not established by replay: a server that serves a consistent stale snapshot (an old head with the
+KELs cut after it) cannot be told from an honest one. Anchor application data is re-serialized as
+received; data whose JSON form differs between aeson and the browser (for example <code>1.0</code>) fails SAID
+verification and refuses the sync.</p>
+<h2 id="lean-4-model">Lean 4 Model</h2>
+<p>Digests, SAIDs and signatures (<code>KERI.Crypto</code>) are imported from
+<a href="https://github.com/paolino/keri-lean">keri-lean</a>. The model of the server is
+<code>lean/KelGroups/Sovereign</code>: member KEL events and group actions (<code>Types</code>), roster replay and the
+membership rule (<code>Membership</code>), the server state, hosting, rotation and admission (<code>Admission</code>),
+and the theorems over every reachable state (<code>Theorems</code>, <code>Invariants</code>). <code>KelGroups.Group</code> uses
+its words; among the theorems the implementation is checked against:</p>
+<table>
+<thead>
+<tr>
+<th>Theorem</th>
+<th>Statement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>admit_iff</code></td>
+<td>an action is admitted exactly when its signature is valid, <code>p</code> is the signer's tip, <code>prev</code> the head, its signer a member (or it is a genesis) and <code>membershipOk</code> holds; the state is then the action appended</td>
+</tr>
+<tr>
+<td><code>chain_is_line</code></td>
+<td>a reachable group chain is one line of <code>prev</code> links from its genesis</td>
+</tr>
+<tr>
+<td><code>admitted_admin_signer</code></td>
+<td>an admitted add, remove, grant or revoke is signed by an admin</td>
+</tr>
+<tr>
+<td><code>removed_not_member</code></td>
+<td>after an admitted remove the target is neither member nor admin</td>
+</tr>
+<tr>
+<td><code>leave_only_signer</code></td>
+<td>an admitted leave removes its signer and changes nobody else</td>
+</tr>
+<tr>
+<td><code>nonmember_refused</code></td>
+<td>an action of a non-member in an existing group is refused</td>
+</tr>
+<tr>
+<td><code>member_gained_only_by_add</code></td>
+<td>membership is gained only by an add (or the genesis)</td>
+</tr>
+<tr>
+<td><code>inv_reachable</code></td>
+<td>every reachable state satisfies <code>Inv</code>: KELs and chains are lines, every action is in its signer's KEL, a group with members has an admin, every admin is a member</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tests">Tests</h2>
+<p>The <code>invariants</code> suite (Hspec + QuickCheck) names every check by its invariant ID and layer
+(<code>/rule</code> pure, <code>/store</code> SQLite file, <code>/http</code> warp and http-client, <code>/cli</code> the executable).
+Events are built by legitimate signing with real Ed25519 keys and next-key commitments.</p>
+<table>
+<thead>
+<tr>
+<th>Test module</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MemberKelSpec</code>, <code>MemberKelStoreSpec</code>, <code>MemberKelServerSpec</code></td>
+<td>The KERI rule, the store and <code>POST /kel</code>, <code>GET /kel</code>; the executable</td>
+</tr>
+<tr>
+<td><code>GroupSpec</code>, <code>GroupStoreSpec</code>, <code>GroupServerSpec</code></td>
+<td>Group action admission: rule, store (concurrency, retry, atomicity, reopen), <code>POST /actions</code></td>
+</tr>
+<tr>
+<td><code>GroupMembershipSpec</code>, <code>GroupMembershipStoreSpec</code>, <code>GroupMembershipServerSpec</code></td>
+<td>Membership and admin rules: generated sequences against an oracle of the rules, store, <code>POST /actions</code></td>
+</tr>
+<tr>
+<td><code>ServerIdentitySpec</code></td>
+<td>The server holds no key</td>
+</tr>
+<tr>
+<td><code>GroupIndexServerSpec</code></td>
+<td><code>GET /groups/&lt;gid&gt;</code> and <code>GET /kel/&lt;prefix&gt;?after=&lt;sn&gt;</code> over generated membership runs</td>
+</tr>
+</tbody>
+</table>
+<p>The client checks (<code>client/kelgroups-client/test</code>) print one line per invariant ID and layer,
+<code>PASS &lt;ID&gt;/&lt;layer&gt; &lt;description&gt; cases=&lt;n&gt;</code> or a line starting <code>FAIL</code> (the run then exits non-zero):
+<code>/unit</code> on legitimately signed fixtures, <code>/e2e</code> against a real <code>kelgroups-server</code> on a fresh database
+that the suite builds through <code>POST /kel</code> and <code>POST /actions</code>; adversarial <code>/e2e</code> cases wrap the real
+HTTP transport and remove an event from a real KEL answer, a prefix from a real index, or lose an
+answer after the server received the request.</p>
+<table>
+<thead>
+<tr>
+<th>Test module</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KelSpec</code></td>
+<td><code>INV-41-KEL/unit</code>: every clause of the KERI rule on inception, rotation and interaction; non-group interactions</td>
+</tr>
+<tr>
+<td><code>GroupSpec</code></td>
+<td><code>INV-41-SAME/unit</code>, <code>INV-41-GAP/unit</code>, <code>INV-41-RULE/unit</code>, <code>INV-41-LINE/unit</code>: replay over generated one- and two-group KEL sets</td>
+</tr>
+<tr>
+<td><code>SyncSpec</code></td>
+<td><code>INV-41-OWN/unit</code>, <code>INV-41-REWRITE/unit</code>: sync, refresh and own history against an in-memory stand-in for the server</td>
+</tr>
+<tr>
+<td><code>E2ESpec</code></td>
+<td><code>INV-41-SAME/e2e</code>, <code>INV-41-GAP/e2e</code>, <code>INV-41-RETRY/e2e</code>, <code>INV-41-RACE/e2e</code>, <code>INV-41-OWN/e2e</code> against the real server</td>
+</tr>
+<tr>
+<td><code>JwkSpec</code></td>
+<td>Key export and import as JWK</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ci">CI</h2>
+<ul>
+<li><strong>Build + Test</strong>: <code>nix develop .#ci -c just ci</code> (format, cabal-fmt, lint, build, test, lean, client build,
+  client checks, client end-to-end suite against the server)</li>
+<li><strong>Docs</strong>: MkDocs deployed to GitHub Pages on push to main</li>
+</ul>
+<h2 id="justfile-recipes">Justfile Recipes</h2>
+<table>
+<thead>
+<tr>
+<th>Recipe</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>build</code></td>
+<td><code>cabal build all -O0</code></td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td><code>cabal test all -O0 --test-show-details=direct</code></td>
+</tr>
+<tr>
+<td><code>format</code></td>
+<td><code>fourmolu -i lib/**/*.hs test/*.hs app/*.hs</code></td>
+</tr>
+<tr>
+<td><code>lint</code></td>
+<td><code>hlint lib/</code></td>
+</tr>
+<tr>
+<td><code>cabal-fmt</code></td>
+<td><code>cabal-fmt -i kelgroups.cabal</code></td>
+</tr>
+<tr>
+<td><code>lean</code></td>
+<td><code>cd lean &amp;&amp; lake build</code></td>
+</tr>
+<tr>
+<td><code>build-client</code></td>
+<td><code>cd client &amp;&amp; npm install &amp;&amp; spago build</code></td>
+</tr>
+<tr>
+<td><code>bundle-client</code></td>
+<td>build + bundle PureScript client</td>
+</tr>
+<tr>
+<td><code>test-client</code></td>
+<td><code>cd client &amp;&amp; spago test -p kelgroups-client</code> (unit checks)</td>
+</tr>
+<tr>
+<td><code>e2e-client</code></td>
+<td>build and start <code>kelgroups-server</code> on a fresh database and a free port (or <code>$E2E_CLIENT_PORT</code>), check the socket on that port belongs to it, run the end-to-end suite against it, stop it</td>
+</tr>
+<tr>
+<td><code>e2e-client-against &lt;url&gt;</code></td>
+<td>run the end-to-end suite against a server at <code>&lt;url&gt;</code>; an empty <code>&lt;url&gt;</code> fails</td>
+</tr>
+<tr>
+<td><code>ci</code></td>
+<td>format + cabal-fmt + lint + build + test + lean + build-client + test-client + e2e-client</td>
+</tr>
+<tr>
+<td><code>docs</code></td>
+<td><code>mkdocs build</code></td>
+</tr>
+<tr>
+<td><code>serve</code></td>
+<td><code>cabal run kelgroups-server -O0 -- &lt;port&gt; &lt;db&gt;</code></td>
+</tr>
+<tr>
+<td><code>clean</code></td>
+<td>cabal clean + lake clean</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mermaid.mjs" type="module"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1124 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://paolino.github.io/kelgroups/security-design/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../implementation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Security Design - kelgroups</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#security-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="kelgroups" class="md-header__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            kelgroups
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Security Design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="kelgroups" class="md-nav__button md-logo" aria-label="kelgroups" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    kelgroups
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/paolino/kelgroups" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    paolino/kelgroups
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you get
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trust" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trust
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-group-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The group action
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admission-and-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admission and retry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#group-chain-and-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group chain and replay
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#membership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Membership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rulings-after-the-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rulings after the design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../key-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Key Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you get
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trust" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trust
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-group-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The group action
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admission-and-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admission and retry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#group-chain-and-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group chain and replay
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#membership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Membership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rulings-after-the-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rulings after the design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="security-design">Security design</h1>
+<p>This page is for anyone who belongs to a kelgroups group, builds a client or an
+application on top of one, or runs the server that hosts it. It answers three
+questions before any mechanism is named: what the server can and cannot do to
+you, what exactly you sign when you act in a group, and what happens to your
+place in the group when a key is stolen or lost.</p>
+<blockquote>
+<p><strong>Status.</strong> This is the accepted design, settled on 2026-10-01. It is a
+design only: nothing on this page is implemented yet. Where other pages of
+this site describe a server identity, a bootstrap mode or admin voting, this
+page supersedes them.</p>
+</blockquote>
+<h2 id="what-you-get">What you get</h2>
+<table>
+<thead>
+<tr>
+<th>You are</th>
+<th>You want to</th>
+<th>What you get</th>
+<th>What you see when it is refused</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A member</td>
+<td>change the group</td>
+<td>an action signed in your own KEL, against the group head you validated; it is final when you see it in the chain</td>
+<td>nothing is stored; if the head moved, you re-read it and sign again</td>
+</tr>
+<tr>
+<td>A member</td>
+<td>trust what the server shows</td>
+<td>forgery, reordering and a missing interior action are detectable from member signatures alone</td>
+<td>a gap in the chain: you refuse to sign until it is resolved</td>
+</tr>
+<tr>
+<td>A member whose current key is stolen</td>
+<td>stop the thief</td>
+<td>you rotate with your separately backed-up next key</td>
+<td>the thief's actions admitted before your rotation stay in history</td>
+</tr>
+<tr>
+<td>A member who lost both keys</td>
+<td>come back</td>
+<td>an admin adds your new identity</td>
+<td>the old identity is gone; the server cannot recover it</td>
+</tr>
+<tr>
+<td>An admin</td>
+<td>manage who belongs</td>
+<td>add and remove members, grant and revoke admin</td>
+<td>the last admin cannot leave or drop its own admin unless another admin exists or it is the sole member</td>
+</tr>
+<tr>
+<td>Someone running a host</td>
+<td>run the server</td>
+<td>store member KELs and admit actions one at a time</td>
+<td>the server has no identity of its own and signs nothing</td>
+</tr>
+</tbody>
+</table>
+<h2 id="trust">Trust</h2>
+<p>The server hosts every member's KEL and enforces single-line admission: it
+orders group actions by admitting them one at a time. It has no KERI identity
+and makes no signatures. The only evidence is what members sign.</p>
+<pre class="mermaid"><code>flowchart LR
+    subgraph device["Member device"]
+        K["current key&lt;br/&gt;(next key backed up elsewhere)"]
+        L["local copy of every group KEL,&lt;br/&gt;validated"]
+    end
+    subgraph host["Server (holds no identity, signs nothing)"]
+        H["hosted member KELs"]
+        I["head index&lt;br/&gt;(not evidence)"]
+    end
+    K --&gt;|"signs group action"| H
+    H --&gt;|"admitted or refused,&lt;br/&gt;nothing stored on refusal"| L
+    H --&gt;|"KELs and head,&lt;br/&gt;current members only"| L
+    I -.-&gt;|"may be read,&lt;br/&gt;not evidence"| L</code></pre>
+<p>What members assume, detect, and leave to the deployment:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>What it covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Assumed, not detected</strong></td>
+<td>The server may show different members different chains (a fork), or withhold the latest events. These are written trust assumptions.</td>
+</tr>
+<tr>
+<td><strong>Detectable later without a format change</strong></td>
+<td>Later detection of a fork or withholding, by members comparing head digests through any channel, must need no change to the signed format.</td>
+</tr>
+<tr>
+<td><strong>Detected from member-signed evidence</strong></td>
+<td>Forgery, reordering, and interior omission.</td>
+</tr>
+<tr>
+<td><strong>Outside the protocol</strong></td>
+<td>Transport security: see <a href="#rulings-after-the-design">Rulings after the design</a>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-group-action">The group action</h2>
+<p>A group action is an interaction event (<code>ixn</code>) in the member's own hosted KEL.
+The member signs:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>group id</td>
+<td>the self-addressing digest (SAID) of the group's genesis action</td>
+</tr>
+<tr>
+<td>KERI <code>p</code></td>
+<td>the digest of the member's previous event in its own KEL</td>
+</tr>
+<tr>
+<td>payload</td>
+<td>opaque to the core, except the core membership actions</td>
+</tr>
+<tr>
+<td><code>prev</code></td>
+<td>the digest of the last admitted group action, from any member; none at genesis</td>
+</tr>
+</tbody>
+</table>
+<p><code>p</code> and <code>prev</code> are two different links. <code>p</code> keeps a member's own KEL
+hash-chained, as in any KERI KEL. <code>prev</code> pins the action to the whole group's
+history, and that history crosses member KELs: the group chain is nothing but
+the <code>prev</code> links inside admitted actions.</p>
+<pre class="mermaid"><code>flowchart RL
+    GID(["group id"])
+    subgraph alice["Alice's KEL (creator)"]
+        direction RL
+        A0["icp"]
+        A1["ixn: genesis&lt;br/&gt;prev = none"]
+        A2["ixn: add Bob"]
+        A3["ixn: action"]
+    end
+    subgraph bob["Bob's KEL"]
+        direction RL
+        B0["icp&lt;br/&gt;(hosted before Bob is added)"]
+        B1["ixn: action"]
+        B2["rot&lt;br/&gt;(no group position)"]
+        B3["ixn: action"]
+    end
+    A1 --&gt;|"p"| A0
+    A2 --&gt;|"p"| A1
+    A3 --&gt;|"p"| A2
+    B1 --&gt;|"p"| B0
+    B2 --&gt;|"p"| B1
+    B3 --&gt;|"p"| B2
+    A2 ==&gt;|"prev"| A1
+    B1 ==&gt;|"prev"| A2
+    A3 ==&gt;|"prev"| B1
+    B3 ==&gt;|"prev"| A3
+    GID -.-&gt;|"SAID of"| A1</code></pre>
+<p>Thin arrows are KERI <code>p</code> links, each inside one KEL. Thick arrows are group
+<code>prev</code> links, which cross from one member's KEL to another's. The genesis action
+is the creator's first group action; its <code>prev</code> is none and the group id is its
+self-addressing digest. Bob's rotation sits in his KEL between two of his
+actions, but no <code>prev</code> points at it: rotations have no place in the group chain.</p>
+<h2 id="admission-and-retry">Admission and retry</h2>
+<p>The server admits a group action if and only if:</p>
+<ul>
+<li>the signature is valid;</li>
+<li><code>p</code> is the member's KEL tip;</li>
+<li><code>prev</code> is the current group head;</li>
+<li>the signer is a current member, or the action is the genesis;</li>
+<li>the core membership rules hold.</li>
+</ul>
+<p>Admission appends the action to the member's KEL and advances the group head
+in one atomic step. Otherwise nothing is stored. A refused event is void, so
+signing again at the same KEL sequence number is not duplicity.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant M as Member
+    participant S as Server
+    M-&gt;&gt;M: validate every group KEL locally
+    M-&gt;&gt;S: ixn signed with p = own tip, prev = group head
+    alt every admission condition holds
+        S-&gt;&gt;S: append to member KEL and advance head, atomically
+        S--&gt;&gt;M: admitted
+    else any condition fails
+        S--&gt;&gt;M: refused, nothing stored
+        M-&gt;&gt;M: if the head moved, re-read it, re-validate, sign again
+        M-&gt;&gt;M: if an own rotation was admitted meanwhile, sign again with p = the new tip
+    end
+    Note over M,S: a lost response is retried with identical bytes
+    M-&gt;&gt;S: same ixn bytes again
+    S--&gt;&gt;M: lands at most once, because prev already pins its position
+    M-&gt;&gt;M: treat own ixn as KEL history only once seen admitted</code></pre>
+<ul>
+<li><strong>Retry.</strong> After a lost response the member resends the identical bytes. The
+  action lands at most once.</li>
+<li><strong>Finality.</strong> An action is final when it is visible in the chain.</li>
+<li><strong>Own history.</strong> A member treats its own <code>ixn</code> as part of its KEL history only
+  after it has seen that event admitted.</li>
+</ul>
+<h2 id="group-chain-and-replay">Group chain and replay</h2>
+<p>The chain is the <code>prev</code> links inside admitted actions. No server-side structure
+is evidence: a head index the server keeps is a convenience, never proof.</p>
+<p>Each member holds and validates every group KEL locally before signing. Every
+<code>prev</code> must resolve locally, link by link, back to the genesis action; if one
+does not, the member has found a gap and refuses to sign.</p>
+<pre class="mermaid"><code>flowchart TD
+    S["fetch every group KEL"] --&gt;|"local copy"| V{"every KEL valid?"}
+    V --&gt;|"no"| R["refuse to sign"]
+    V --&gt;|"yes"| W{"every prev resolves&lt;br/&gt;back to genesis?"}
+    W --&gt;|"no: gap found"| R
+    W --&gt;|"yes"| G["sign against the validated head"]</code></pre>
+<h2 id="identity">Identity</h2>
+<ul>
+<li><strong>Rotations live only in member KELs.</strong> The server admits a rotation on KERI
+  validity alone; it has no position in the group chain. An action signed before
+  a rotation and still in flight is stale, because its <code>p</code> is no longer the
+  member's tip: it is refused, and the member signs it again.</li>
+<li><strong>Pre-rotation is mandatory.</strong> Every inception and rotation commits to the
+  digest of the next key.</li>
+<li><strong>Split custody.</strong> The current key lives on the device; the next key is backed
+  up separately.</li>
+<li><strong>Stolen current key.</strong> The member rotates with the next key. Actions admitted
+  before the rotation stay in history; there is no undo and no rollback.</li>
+<li><strong>Both keys lost.</strong> The identity is lost. The member creates a new identity
+  and an admin adds it to the group. The server has no recovery power.</li>
+</ul>
+<pre class="mermaid"><code>stateDiagram-v2
+    [*] --&gt; Active : inception, next key committed
+    Active --&gt; Active : rotation with the next key, admitted on KERI validity
+    Active --&gt; Compromised : current key stolen
+    Compromised --&gt; Active : rotate with the backed-up next key, actions admitted before stay
+    Active --&gt; Lost : current and next key both lost
+    Lost --&gt; [*] : no server recovery, an admin adds a new identity</code></pre>
+<h2 id="membership">Membership</h2>
+<p>Membership is the only meaning the core gives to a payload; every other payload
+is opaque to it and is given meaning by applications.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Who may issue it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>add member</td>
+<td>an admin</td>
+</tr>
+<tr>
+<td>remove member</td>
+<td>an admin</td>
+</tr>
+<tr>
+<td>grant admin</td>
+<td>an admin</td>
+</tr>
+<tr>
+<td>revoke admin</td>
+<td>an admin</td>
+</tr>
+<tr>
+<td>leave</td>
+<td>any member, for itself</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>The creator is the initial sole admin.</li>
+<li>The last admin cannot leave or drop its own admin unless another admin exists
+  or it is the sole member.</li>
+<li>A new member's KEL is hosted before the action that adds it.</li>
+<li>A removed member's past actions stay valid; its later ones are refused.</li>
+</ul>
+<pre class="mermaid"><code>stateDiagram-v2
+    [*] --&gt; Hosted : member KEL hosted
+    Hosted --&gt; InGroup : an admin adds it
+    note right of Hosted : the creator enters by its genesis action, as the sole admin
+    state InGroup {
+        [*] --&gt; Member
+        Member --&gt; Admin : an admin grants admin
+        Admin --&gt; Member : an admin revokes admin, own revocation under the last-admin guard
+    }
+    InGroup --&gt; Removed : an admin removes it, past actions stay valid
+    InGroup --&gt; Left : its own leave action, last-admin guard applies
+    Removed --&gt; [*]
+    Left --&gt; [*]</code></pre>
+<h2 id="rulings-after-the-design">Rulings after the design</h2>
+<p>Two rulings were settled after the design above and have the same standing.</p>
+<ul>
+<li><strong>Reads are for current members only.</strong> A group's KELs and head may be read
+  only by its current members. A reader proves control of a current member key
+  by signing a challenge the server issues.</li>
+<li><strong>TLS is required at deployment.</strong> It sits outside the protocol and keeps
+  reads and sessions private; integrity does not depend on it but rests on
+  member signatures.</li>
+</ul>
+<pre class="mermaid"><code>sequenceDiagram
+    participant M as Member
+    participant S as Server
+    M-&gt;&gt;S: ask to read the group
+    S--&gt;&gt;M: challenge
+    M-&gt;&gt;S: challenge signed with a current member key
+    S-&gt;&gt;S: check the signer is a current member
+    S--&gt;&gt;M: group KELs and head
+    Note over M,S: the session after the challenge is open, see Open</code></pre>
+<h2 id="out-of-scope">Out of scope</h2>
+<ul>
+<li><strong>Host replacement</strong> happens out of band. Export is the KEL set every member
+  already holds; nothing is server-only.</li>
+<li><strong>Multi-signature (k-of-n) actions.</strong></li>
+<li><strong>The Reactivegas extension</strong> comes after the base foundation works.</li>
+</ul>
+<h2 id="decisions">Decisions</h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Chosen</th>
+<th>Over</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What <code>prev</code> covers</td>
+<td>the whole group head</td>
+<td>a per-resource state</td>
+<td>any two concurrent actions conflict; the one refused re-reads the head and signs again, so the group has one line of history</td>
+</tr>
+<tr>
+<td>How <code>prev</code> refers to an action</td>
+<td>a digest only</td>
+<td>a member, KEL position and digest triple</td>
+<td>every member holds the full validated KEL set, so the lookup is local</td>
+</tr>
+<tr>
+<td>Forks and withheld events</td>
+<td>written trust assumptions</td>
+<td>a detection mechanism in the initial design</td>
+<td>detection is left for later; comparing head digests must then need no change to the signed format</td>
+</tr>
+<tr>
+<td>Where membership lives</td>
+<td>in the core</td>
+<td>left to applications</td>
+<td>the server admits, and replay counts, only actions from current members</td>
+</tr>
+<tr>
+<td>Moving to another host</td>
+<td>out of band</td>
+<td>a host-move action in the protocol</td>
+<td>every member already holds the full KEL set; no host identity is in the signed bytes</td>
+</tr>
+</tbody>
+</table>
+<h2 id="open">Open</h2>
+<p>These are not decided and nothing on this page should be read as deciding them.</p>
+<ul>
+<li><strong>The read session after the challenge</strong>: how a member stays authorised after
+  signing the server's challenge, for example a cookie, and when that expires.</li>
+<li><strong>Fork and withholding detection</strong>: how members compare head digests. Only the
+  constraint is decided, that doing so needs no format change.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mermaid.mjs" type="module"></script>
+      
+    
+  </body>
+</html>
