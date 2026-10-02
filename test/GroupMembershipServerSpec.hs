@@ -43,7 +43,6 @@ import KelGroups.Kel.Codec (encodeSignedEvent)
 import KelGroups.Kel.Store
     ( lookupChain
     , lookupMemberKel
-    , openMemberKels
     )
 import KelGroups.Server (kelApp)
 import Keri.Event
@@ -62,6 +61,7 @@ import MemberKelServerSpec
     , request
     )
 import MemberKelStoreSpec (withDb)
+import MemberKelStoreSpec qualified as MKS
 import Network.HTTP.Client qualified as HC
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -90,8 +90,7 @@ withSrvBy
     :: (IO Application -> (Warp.Port -> IO a) -> IO a)
     -> (FilePath -> Srv -> IO a)
     -> IO a
-withSrvBy serve k = withDb $ \path -> withConnection path $ \c -> do
-    kels <- openMemberKels c
+withSrvBy serve k = withDb $ \path -> MKS.withKels path $ \kels -> do
     mgr <- HC.newManager HC.defaultManagerSettings
     serve
         (pure (kelApp kels Nothing))

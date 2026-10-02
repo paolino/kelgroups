@@ -1,5 +1,4 @@
-# kelgroups — Implementation Plan
-> Superseded in part: the [security design](security-design.md) replaces bootstrap mode and admin voting described here.
+# kelgroups — Implementation
 
 ## Nix Setup
 
@@ -14,142 +13,31 @@
 **`kelgroups.cabal`** — library + test suite + executable:
 
 - Library depends on `base`, `containers`, `text`, `bytestring`, `sqlite-simple`, `stm`, `aeson`, `http-types`, `wai`, `keri-hs`
-- Executable depends on `kelgroups`, `warp`, `stm`, `text`
-- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm` + `sqlite-simple` + `process` + `network` + `memory`; it runs the built `kelgroups-server` (`build-tool-depends`)
+- Executable depends on `kelgroups`, `warp`, `wai-app-static`
+- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `wai` + `http-client` + `http-types` + `aeson` + `async` + `sqlite-simple` + `process` + `network` + `memory`; it runs the built `kelgroups-server` (`build-tool-depends`)
 
 ## Library Modules
 
 | Module | Role |
 |---|---|
-| `KelGroups.Types` | Core types: `Role`, `Member`, `RoleDef`, `GroupConfig` |
-| `KelGroups.Event` | `GroupEvent a`, `BaseEvent`, `Proposal` |
-| `KelGroups.State` | `GroupState a`, `adminCount`, `majority`, `isAdmin` |
-| `KelGroups.Fold` | KEL fold: `foldGroup`, `applyEvent`, `AppFold` |
-| `KelGroups.Validate` | Event validation with `ValidationError` ADT |
-| `KelGroups.Bootstrap` | `AuthMode` detection (bootstrap vs normal) |
-| `KelGroups.Trivial` | Trivial instance: `a = ()`, no app roles |
-| `KelGroups.Store` | SQLite-backed KEL store with KERI events and digest chain |
 | `KelGroups.Kel` | Member KELs and the KERI rule on append (`host`, `rotate`, `tip`) |
 | `KelGroups.Kel.Codec` | JSON wire form of signed member KEL events |
-| `KelGroups.Kel.Store` | Member KELs in the server database, re-checked on open; group action admission |
-| `KelGroups.Group` | Group actions, chains, membership and their admission (`admit`, `head`, `roster`) |
-| `KelGroups.Server` | WAI application: routing, KERI event construction, SSE streaming |
-| `KelGroups.Server.JSON` | Orphan `ToJSON`/`FromJSON` instances + HTTP types (`Submission`, `AppendResult`, `ServerError`) |
-
-### Type Sketch
-
-```haskell
-data Role = Admin | AppRole RoleName
-
-data Member = Member
-  { memberKey :: Text
-  , memberRoles :: Set Role
-  }
-
-data RoleDef a = RoleDef
-  { canAdd :: a -> Bool
-  , canRemove :: a -> Bool
-  }
-
-newtype GroupConfig a = GroupConfig
-  { roleDefs :: Map RoleName (RoleDef a)
-  }
-```
-
-### Events
-
-```haskell
-data GroupEvent a = Base BaseEvent | App a
-
-data BaseEvent
-  = Propose Proposal
-  | Approve ProposalId
-
-data Proposal
-  = IntroduceMember Text (Set Role)
-  | RemoveMember Text
-  | ChangeRoles Text (Set Role)
-```
-
-### State
-
-```haskell
-data GroupState a = GroupState
-  { members :: Map Text Member
-  , pendingProposals :: Map ProposalId PendingProposal
-  , appFold :: a
-  }
-
-data AuthMode = Bootstrap | Normal
-
-authMode :: GroupState a -> AuthMode
-authMode gs
-  | adminCount gs == 0 = Bootstrap
-  | otherwise = Normal
-```
-
-### Fold
-
-```haskell
-foldGroup
-  :: AppFold a -> a -> [(Text, GroupEvent a)] -> GroupState a
-
-type AppFold a = a -> a -> a
-```
-
-### Validation
-
-```haskell
-validateEvent
-  :: GroupConfig a -> GroupState a -> Text -> GroupEvent a
-  -> Either ValidationError ()
-```
-
-### Store
-
-```haskell
-data KELStore a = KELStore
-  { storeConn :: Connection
-  , stateVar :: TVar (GroupState a)
-  , tipVar :: TVar (Maybe ChainTip)
-  , lengthVar :: TVar Int
-  }
-
-data ChainTip = ChainTip
-  { tipPrefix :: Text, tipSeqNo :: Int, tipDigest :: Text }
-
-openKEL :: FromJSON a => AppFold a -> a -> FilePath -> IO (KELStore a)
-closeKEL :: KELStore a -> IO ()
-appendEvent :: ToJSON a => KELStore a -> AppFold a -> Text -> Event -> Text -> GroupEvent a -> IO ()
-readState :: KELStore a -> IO (GroupState a)
-readEventsFrom :: KELStore a -> Int -> IO [StoredEvent]
-kelLength :: KELStore a -> IO Int
-chainTip :: KELStore a -> IO (Maybe ChainTip)
-```
-
-Events are stored as KERI canonical JSON (via `serializeEvent` from keri-hs) in SQLite alongside the group event anchor, signer key, signature, and denormalized chain metadata (prefix, sequence number, digest). The in-memory `TVar` state is updated incrementally on each append.
-
-A fresh store is empty: the server holds no key and creates no event of its own. The first submission becomes the group KEL's inception, and the group identifier is its SAID (`tipPrefix` once it is stored). On subsequent opens all group events are replayed from the `group_event` column to rebuild in-memory state. The chain tip is recovered from the last row's metadata.
+| `KelGroups.Kel.Store` | The database file: member KELs, re-checked on open; group action admission |
+| `KelGroups.Group` | Group actions, chains, membership and their admission (`admit`, `head`, `roster`, `membershipOk`) |
+| `KelGroups.Server` | WAI application: `POST /kel`, `GET /kel/<prefix>`, `POST /actions` |
+| `KelGroups.Vote.Types`, `KelGroups.Vote.State` | Held app-scoped proposal substrate; used by nothing in the server |
 
 ### Server
 
-HTTP interface via warp + wai with JSON encoding (aeson).
+`kelApp` routes `POST /kel`, `GET /kel/<prefix>` and `POST /actions` (below). An unmatched GET or
+HEAD goes to an optional fallback application; any other unmatched request answers 404. The
+removed group path (`POST /events`, `GET /events`, `GET /condition`, `GET /stream`, `GET /info`,
+the `?key=` guard) answers 404.
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/condition` | GET | Current group state + auth mode |
-| `/events?after=N` | GET | First event after sequence number N |
-| `/events` | POST | Submit a `Submission` (signer + signature + priorDigest + event) |
-| `/info` | GET | Public admin emails, pending status, group identifier (none before the first submission) |
-| `/stream` | GET | SSE stream — emits `event: new` with `{"sn":N}` on each append |
-
-**SSE mechanism:** Each client gets a `dupTChan` copy of the broadcast channel. Disconnection is handled by warp (thread dies, TChan is GC'd).
-
-**POST flow:** Parse JSON → check auth mode (bootstrap requires passphrase, normal requires member) → construct KERI event (inception for bootstrap, interaction for normal) → verify Ed25519 signature against serialized KERI event → check `priorDigest` matches current chain tip (stale-tip detection) → validate business event → append to store → broadcast sequence number → respond with `AppendResult`.
-
-**Error codes:** 400 (bad JSON), 401 (wrong/missing passphrase), 403 (non-member access), 404 (unknown route or no event), 409 (stale tip — another client appended first), 422 (validation error).
-
-**Executable:** `kelgroups-server <port> <db-path> <passphrase>` — opens a SQLite KEL and the member KELs on the same database, creates broadcast channel, runs warp serving the group endpoints, then the member KEL endpoints, then the static client.
+**Executable:** `kelgroups-server <port> <db>` — opens the member KEL store on the database
+file and runs warp serving `kelApp`, with the static client files
+(`client/kelgroups-trivial/dist`) as the fallback. Any other command line prints the usage and
+exits.
 
 ### Member KELs
 
@@ -165,7 +53,8 @@ appendInteraction :: MemberKel -> SignedEvent -> Either KelRefusal MemberKel
 tip :: MemberKel -> Text
 currentKeys :: MemberKel -> ([Text], Int)
 
-openMemberKels :: Connection -> IO MemberKels
+openMemberKels :: FilePath -> IO MemberKels
+closeMemberKels :: MemberKels -> IO ()
 submitMemberEvent :: MemberKels -> SignedEvent -> IO (Either KelRefusal MemberKel)
 lookupMemberKel :: MemberKels -> Text -> IO (Maybe MemberKel)
 ```
@@ -187,12 +76,13 @@ The rule (`KelGroups.Kel`, pure, over keri-hs events) accepts an event only if:
 `Keri.Kel.Append` is not used: it checks a rotation against the prior keys and does not require
 a next-key commitment.
 
-`KelGroups.Kel.Store` keeps one row per event in the `member_kel_events` table of the server
-database (prefix, sequence number, canonical event bytes, signatures, digest; unique on prefix
-and sequence number). A submission is decided under an append lock: a refusal writes nothing; an
-acceptance is one INSERT, and memory is updated after it commits. Opening the database replays
-every stored KEL through the rule and refuses to open on a violation. Interactions are group
-actions, admitted only through `POST /actions` (below).
+`KelGroups.Kel.Store` opens the database file itself and keeps one row per event in its
+`member_kel_events` table (prefix, sequence number, canonical event bytes, signatures, digest;
+unique on prefix and sequence number); it creates no other table and neither reads nor drops
+any other table the file holds. A submission is decided under an append lock: a refusal writes
+nothing; an acceptance is one INSERT, and memory is updated after it commits. Opening the
+database replays every stored KEL through the rule and refuses to open on a violation.
+Interactions are group actions, admitted only through `POST /actions` (below).
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -350,67 +240,38 @@ deciding: signer an admin, added identity hosted, target state, last-admin guard
 | grant of an admin; revoke of a non-admin | 409 | `alreadyAdmin`, `targetNotAdmin` |
 | the action would leave members and no admin | 409 | `lastAdmin` |
 
-## Lean 4 Proofs
+## Lean 4 Model
 
-Generic KERI types (`Digest`, `SAID`, `Key`, `KELEvent`, `KEL`, `hashChainValid`) are imported from [keri-lean](https://github.com/paolino/keri-lean). kelgroups-specific types and all 9 proof files are local.
-
-Invariants proven in `lean/KelGroups/Invariants.lean`:
-
-| Theorem | Statement |
-|---|---|
-| `bootstrap_iff_zero_admins` | `authMode gs = bootstrap ↔ adminCount gs = 0` |
-| `normal_iff_positive_admins` | `authMode gs = normal ↔ adminCount gs ≠ 0` |
-| `empty_is_bootstrap` | `authMode emptyState = bootstrap` |
-| `majority_zero` .. `majority_three` | Concrete majority values |
-| `majority_le` | `majority n ≤ n` |
-| `majority_pos` | `n > 0 → majority n > 0` |
-| `remove_all_triggers_bootstrap` | Empty members → bootstrap |
-| `admin_member_means_normal` | Admin in members → normal mode |
-
-Transition invariants proven in `lean/KelGroups/TransitionInvariants.lean`:
+Digests, SAIDs and signatures (`KERI.Crypto`) are imported from
+[keri-lean](https://github.com/paolino/keri-lean). The model of the server is
+`lean/KelGroups/Sovereign`: member KEL events and group actions (`Types`), roster replay and the
+membership rule (`Membership`), the server state, hosting, rotation and admission (`Admission`),
+and the theorems over every reachable state (`Theorems`, `Invariants`). `KelGroups.Group` uses
+its words; among the theorems the implementation is checked against:
 
 | Theorem | Statement |
 |---|---|
-| `enact_introduce_admin_exits_bootstrap` | Introducing admin → adminCount > 0 |
-| `enact_introduce_admin_count` | Fresh admin key → adminCount increments by 1 |
-| `enact_introduce_nonadmin_count` | Non-admin introduce → adminCount unchanged |
-| `enact_preserves_pendingProposals` | enact only touches members |
-| `enact_remove_preserves_normal` | adminCount ≥ 2 and remove → adminCount ≥ 1 |
+| `admit_iff` | an action is admitted exactly when its signature is valid, `p` is the signer's tip, `prev` the head, its signer a member (or it is a genesis) and `membershipOk` holds; the state is then the action appended |
+| `chain_is_line` | a reachable group chain is one line of `prev` links from its genesis |
+| `admitted_admin_signer` | an admitted add, remove, grant or revoke is signed by an admin |
+| `removed_not_member` | after an admitted remove the target is neither member nor admin |
+| `leave_only_signer` | an admitted leave removes its signer and changes nobody else |
+| `nonmember_refused` | an action of a non-member in an existing group is refused |
+| `member_gained_only_by_add` | membership is gained only by an add (or the genesis) |
+| `inv_reachable` | every reachable state satisfies `Inv`: KELs and chains are lines, every action is in its signer's KEL, a group with members has an admin, every admin is a member |
 
-## QuickCheck Properties
+## Tests
 
-Properties and integration tests organized by layer:
+The `invariants` suite (Hspec + QuickCheck) names every check by its invariant ID and layer
+(`/rule` pure, `/store` SQLite file, `/http` warp and http-client, `/cli` the executable).
+Events are built by legitimate signing with real Ed25519 keys and next-key commitments.
 
-| Test module | Scope | Count |
-|---|---|---|
-| `InvariantsSpec` | Pure state invariants (Lean mirrors) | 11 |
-| `TransitionInvariantsSpec` | Pure transition invariants (Lean mirrors) | 8 |
-| `FoldInvariantsSpec` | Fold-level properties (app events, approve, changeRoles) | 5 |
-| `ValidateSpec` | Validation rule coverage (bootstrap, membership, roles) | 14 |
-| `StoreSpec` | Store mechanics (roundtrip, fold consistency, readEventsFrom, kelLength) | 6 |
-| `StoreInvariantsSpec` | Lean invariants through KERI event + SQLite roundtrip | 13 |
-| `ServerSpec` | HTTP endpoints, SSE, auth, validation errors | 13 |
-| `E2ESpec` | End-to-end multi-admin governance flows | 14 |
-| `MultiClientSpec` | Concurrent clients, stale-tip rejection, SSE notifications | 3 |
-
-**Total: 87 tests.**
-
-### Store-through DSL
-
-`StoreTestDSL` provides combinators that mirror Lean quantifier patterns:
-
-```haskell
--- Lean: theorem foo (gs : GroupState) : P gs
-onReachable :: (GroupState () -> Bool) -> Property
-
--- Lean: theorem foo (gs : GroupState) (h : Pre gs) : P gs
-onReachableWhere :: (GroupState () -> Bool) -> (GroupState () -> Bool) -> Property
-
--- Lean: theorem foo (gs) (mid) (roles) : P (f gs mid roles)
-onReachableWith :: Gen [(Text, GroupEvent ())] -> (GroupState () -> Gen Bool) -> Property
-```
-
-The `arbitraryHistory` generator produces valid event histories by tracking state: bootstrap first, then random proposals from live admins. States are reached through the full store pipeline (KERI event construction → SQLite write → reopen → decode → fold).
+| Test module | Scope |
+|---|---|
+| `MemberKelSpec`, `MemberKelStoreSpec`, `MemberKelServerSpec` | The KERI rule, the store and `POST /kel`, `GET /kel`; the executable |
+| `GroupSpec`, `GroupStoreSpec`, `GroupServerSpec` | Group action admission: rule, store (concurrency, retry, atomicity, reopen), `POST /actions` |
+| `GroupMembershipSpec`, `GroupMembershipStoreSpec`, `GroupMembershipServerSpec` | Membership and admin rules: generated sequences against an oracle of the rules, store, `POST /actions` |
+| `ServerIdentitySpec` | The server holds no key |
 
 ## CI
 
@@ -432,5 +293,5 @@ The `arbitraryHistory` generator produces valid event histories by tracking stat
 | `test-client` | `cd client && spago -x test.dhall test` |
 | `ci` | format + cabal-fmt + lint + build + test + lean + client |
 | `docs` | `mkdocs build` |
-| `serve` | `cabal run kelgroups-server -O0 -- <port> <db> <pass>` |
+| `serve` | `cabal run kelgroups-server -O0 -- <port> <db>` |
 | `clean` | cabal clean + lake clean |

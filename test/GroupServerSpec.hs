@@ -19,7 +19,6 @@ import Data.Aeson.Encoding (encodingToLazyByteString)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KM
 import Data.Text (Text)
-import Database.SQLite.Simple (withConnection)
 import GroupFixtures
     ( actWith
     , anchoredOf
@@ -36,7 +35,6 @@ import GroupFixtures
     )
 import GroupSpec (Scene (..), genScene)
 import KelGroups.Kel.Codec (encodeSignedEvent)
-import KelGroups.Kel.Store (openMemberKels)
 import KelGroups.Server (kelApp)
 import Keri.Event
     ( InteractionData (..)
@@ -63,7 +61,7 @@ import MemberKelServerSpec
     , refused
     , request
     )
-import MemberKelStoreSpec (withDb)
+import MemberKelStoreSpec (withDb, withKels)
 import Network.HTTP.Client qualified as HC
 import Network.Wai.Handler.Warp qualified as Warp
 import Test.Hspec (Spec, describe)
@@ -80,8 +78,7 @@ import Test.QuickCheck
 
 -- | A running server on a fresh database, member KELs only.
 withSrv :: (Srv -> IO a) -> IO a
-withSrv act = withDb $ \path -> withConnection path $ \c -> do
-    kels <- openMemberKels c
+withSrv act = withDb $ \path -> withKels path $ \kels -> do
     mgr <- HC.newManager HC.defaultManagerSettings
     Warp.testWithApplication
         (pure (kelApp kels Nothing))

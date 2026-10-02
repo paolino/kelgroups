@@ -7,13 +7,15 @@ Description : Member KELs persisted in the server database
 Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
-Checks of 'KelGroups.Kel.Store' against a real SQLite file
-shared with the group store. Database state is compared as a
-dump of every table the file holds, discovered at run time.
+Checks of 'KelGroups.Kel.Store' against a real SQLite file the
+store opens itself. Database state is compared as a dump of every
+table the file holds, discovered at run time.
 -}
 module MemberKelStoreSpec
     ( spec
     , withDb
+    , withKels
+    , oldPathTables
     , tableNames
     , dumpTables
     ) where
@@ -30,7 +32,6 @@ import Control.Exception (SomeException, bracket, catch, try)
 import Control.Monad (forM)
 import Data.Aeson.Encoding (encodingToLazyByteString)
 import Data.ByteString.Lazy qualified as LBS
-import Data.List ((\\))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
@@ -42,6 +43,7 @@ import Database.SQLite.Simple
     , execute
     , execute_
     , query_
+    , withConnection
     )
 import KelGroups.Kel
     ( KelRefusal (..)
@@ -53,18 +55,11 @@ import KelGroups.Kel
 import KelGroups.Kel.Codec (encodeSignatures)
 import KelGroups.Kel.Store
     ( MemberKels
+    , closeMemberKels
     , lookupMemberKel
     , openMemberKels
     , submitMemberEvent
     )
-import KelGroups.State (GroupState)
-import KelGroups.Store
-    ( KELStore (..)
-    , closeKEL
-    , openKEL
-    , readState
-    )
-import KelGroups.Trivial (trivialFold, trivialInitial)
 import Keri.Event (RotationData (..), eventDigest)
 import Keri.Event.Serialize (serializeEvent)
 import Keri.Kel (SignedEvent (..))
@@ -120,32 +115,28 @@ dumpTables conn = do
                 Query ("SELECT * FROM \"" <> n <> "\" ORDER BY rowid")
         pure (n, rows)
 
--- | The group store and the member KELs on one database.
+-- | The member KEL store on a database file, and a second connection to it.
 data Opened = Opened
-    { opStore :: KELStore ()
+    { opConn :: Connection
     , opKels :: MemberKels
     }
 
+-- | The member KEL store open on a file.
+withKels :: FilePath -> (MemberKels -> IO a) -> IO a
+withKels path = bracket (openMemberKels path) closeMemberKels
+
 withOpened :: FilePath -> (Opened -> IO a) -> IO a
 withOpened path act =
-    bracket
-        (openKEL trivialFold trivialInitial path)
-        closeKEL
-        $ \store -> do
-            kels <- openMemberKels (storeConn store)
-            act Opened{opStore = store, opKels = kels}
+    withKels path $ \kels -> withConnection path $ \c ->
+        act Opened{opConn = c, opKels = kels}
 
--- | The table 'openMemberKels' adds to the group store's database.
+-- | The single table 'openMemberKels' creates in a fresh database.
 memberTable :: FilePath -> IO Text
 memberTable path =
-    bracket (openKEL trivialFold trivialInitial path) closeKEL $
-        \store -> do
-            before <- tableNames (storeConn store)
-            _ <- openMemberKels (storeConn store)
-            after <- tableNames (storeConn store)
-            case after \\ before of
-                [t] -> pure t
-                ts -> error ("expected one member KEL table, got " <> show ts)
+    withKels path $ \_ ->
+        withConnection path tableNames >>= \case
+            [t] -> pure t
+            ts -> error ("expected one member KEL table, got " <> show ts)
 
 submitAll
     :: MemberKels -> [SignedEvent] -> IO [Either KelRefusal MemberKel]
@@ -174,14 +165,14 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
             \identical resend included, and the KEL is unchanged"
             $ forAll genRotChain
             $ \ch -> ioProperty $ withDb $ \path ->
-                withOpened path $ \Opened{opStore, opKels} -> do
+                withOpened path $ \Opened{opConn, opKels} -> do
                     let icp = firstEvent ch
                         resigned = icp{signatures = reverse (signatures icp)}
                     r0 <- submitMemberEvent opKels icp
-                    d0 <- dumpTables (storeConn opStore)
+                    d0 <- dumpTables opConn
                     r1 <- submitMemberEvent opKels icp
                     r2 <- submitMemberEvent opKels resigned
-                    d1 <- dumpTables (storeConn opStore)
+                    d1 <- dumpTables opConn
                     m1 <- lookupMemberKel opKels (chPrefix ch)
                     pure $
                         conjoin
@@ -197,11 +188,11 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
             \and nothing is stored"
             $ forAll ((,) <$> genRotChain <*> genKeySet)
             $ \(ch, n1) -> ioProperty $ withDb $ \path ->
-                withOpened path $ \Opened{opStore, opKels} -> do
+                withOpened path $ \Opened{opConn, opKels} -> do
                     let (rotSe, _) = rotateChain n1 ch
-                    d0 <- dumpTables (storeConn opStore)
+                    d0 <- dumpTables opConn
                     r <- submitMemberEvent opKels rotSe
-                    d1 <- dumpTables (storeConn opStore)
+                    d1 <- dumpTables opConn
                     m <- lookupMemberKel opKels (chPrefix ch)
                     landed <- submitAll opKels (chEvents ch <> [rotSe])
                     pure $
@@ -215,20 +206,18 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
 
         prop
             "INV-38-ROT-FRAME: an accepted rotation extends only its own \
-            \KEL; other KELs and the group store are unchanged"
+            \KEL; other KELs and their stored rows are unchanged"
             $ forAll ((,,) <$> genRotChain <*> genRotChain <*> genKeySet)
             $ \(a, b, n1) -> ioProperty $ withDb $ \path ->
-                withOpened path $ \Opened{opStore, opKels} -> do
+                withOpened path $ \Opened{opConn, opKels} -> do
                     rs <- submitAll opKels (chEvents a <> chEvents b)
                     let (rotSe, _) = rotateChain n1 a
-                    d0 <- dumpTables (storeConn opStore)
+                    d0 <- dumpTables opConn
                     kb0 <- lookupMemberKel opKels (chPrefix b)
-                    g0 <- readState opStore :: IO (GroupState ())
                     r <- submitMemberEvent opKels rotSe
-                    d1 <- dumpTables (storeConn opStore)
+                    d1 <- dumpTables opConn
                     kb1 <- lookupMemberKel opKels (chPrefix b)
                     ka1 <- lookupMemberKel opKels (chPrefix a)
-                    g1 <- readState opStore
                     let changed =
                             [ (n, rows0, rows1)
                             | ((n, rows0), (_, rows1)) <- zip d0 d1
@@ -242,7 +231,6 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
                                 === Right (chEvents a <> [rotSe])
                             , ka1 === either (const Nothing) Just r
                             , kb1 === kb0
-                            , g1 === g0
                             , map fst d1 === map fst d0
                             , case changed of
                                 [(_, rows0, rows1)] ->
@@ -284,11 +272,11 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
                                ]
                 results <- forM plan $ \(se, shouldLand) -> do
                     (d0, m0, r, d1, m1) <-
-                        withOpened path $ \Opened{opStore, opKels} -> do
-                            d0 <- dumpTables (storeConn opStore)
+                        withOpened path $ \Opened{opConn, opKels} -> do
+                            d0 <- dumpTables opConn
                             m0 <- lookupMemberKel opKels (chPrefix ch)
                             r <- submitMemberEvent opKels se
-                            d1 <- dumpTables (storeConn opStore)
+                            d1 <- dumpTables opConn
                             m1 <- lookupMemberKel opKels (chPrefix ch)
                             pure (d0, m0, r, d1, m1)
                     reopened <- withOpened path $ \Opened{opKels} ->
@@ -381,8 +369,8 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
             $ \path -> do
                 table <- memberTable path
                 ch <- generate genRotChain
-                withOpened path $ \Opened{opStore, opKels} -> do
-                    let conn = storeConn opStore
+                withOpened path $ \Opened{opConn, opKels} -> do
+                    let conn = opConn
                         icp = firstEvent ch
                     -- an INSERT that takes long enough to be interrupted
                     execute_ conn $
@@ -431,8 +419,8 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
             $ \path -> do
                 table <- memberTable path
                 ch <- generate genRotChain
-                withOpened path $ \Opened{opStore, opKels} -> do
-                    let conn = storeConn opStore
+                withOpened path $ \Opened{opConn, opKels} -> do
+                    let conn = opConn
                         icp = firstEvent ch
                     execute_ conn $
                         Query $
@@ -565,14 +553,10 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
                 refusals <- forM corruptions $ \(label, corrupt) ->
                     withDb $ \copy -> do
                         copyFile path copy
+                        withConnection copy corrupt
                         r <-
-                            bracket
-                                (openKEL trivialFold trivialInitial copy)
-                                closeKEL
-                                $ \store -> do
-                                    corrupt (storeConn store)
-                                    try (openMemberKels (storeConn store))
-                                        :: IO (Either SomeException MemberKels)
+                            try (withKels copy (const (pure ())))
+                                :: IO (Either SomeException ())
                         pure $
                             counterexample label $
                                 property (isRefusal r)
@@ -584,6 +568,53 @@ spec = describe "KelGroups.Kel.Store (member KELs in SQLite)" $
                         , counterexample "corruption breaks more than the reveal" onlyReveal
                         ]
                             <> refusals
+
+        it
+            "INV-40-SCHEMA/store: a freshly opened database holds only the \
+            \member KEL table and no row; a file that also holds the old \
+            \path's tables opens and leaves them untouched"
+            $ withDb
+            $ \path -> do
+                fresh <- withKels path $ \_ -> withConnection path dumpTables
+                fresh `shouldBe` [("member_kel_events", [])]
+                withDb $ \old -> do
+                    withConnection old oldPathTables
+                    before <- withConnection old dumpTables
+                    opened <- withKels old $ \_ -> withConnection old dumpTables
+                    after <- withConnection old dumpTables
+                    filter ((/= "member_kel_events") . fst) opened `shouldBe` before
+                    after `shouldBe` opened
+                    map fst after `shouldSatisfy` ("member_kel_events" `elem`)
+
+{- | The tables of the removed group path, with one row each, as its
+store created them.
+-}
+oldPathTables :: Connection -> IO ()
+oldPathTables c = do
+    execute_
+        c
+        "CREATE TABLE events \
+        \( id INTEGER PRIMARY KEY AUTOINCREMENT \
+        \, signer TEXT NOT NULL \
+        \, event_bytes TEXT NOT NULL \
+        \, signature TEXT NOT NULL \
+        \, group_event TEXT NOT NULL \
+        \, prefix TEXT NOT NULL \
+        \, seq_no INTEGER NOT NULL \
+        \, digest TEXT NOT NULL \
+        \)"
+    execute_
+        c
+        "CREATE TABLE founding \
+        \( id INTEGER PRIMARY KEY CHECK (id = 1) \
+        \, founding_json TEXT NOT NULL \
+        \)"
+    execute_
+        c
+        "INSERT INTO events \
+        \(signer, event_bytes, signature, group_event, prefix, seq_no, digest) \
+        \VALUES ('s', '{}', 'sig', '{}', 'p', 0, 'd')"
+    execute_ c "INSERT INTO founding (id, founding_json) VALUES (1, '{}')"
 
 samePrefix :: Chain -> Chain -> Bool
 samePrefix a b = chPrefix a == chPrefix b
