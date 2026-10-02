@@ -113,3 +113,24 @@ Interpretation, not Lean: `hosted` on replay = KEL among the validated ones (as 
   not detectable by replay; freshness is not a protocol guarantee.
 - Anchor `app` data is re-serialized by the client as received; data whose JSON form differs
   between aeson and the browser (e.g. `1.0`) fails SAID verification — fail-closed.
+
+## Rulings during implementation
+
+Owner rulings on behaviour the requirements left open; Lean semantics unchanged.
+
+- A non-group `ixn` in a fetched KEL refuses the sync (`KelInvalid`, `notAGroupAction`).
+- Inside a KEL, removed events (`s` beyond the tip's successor, `p` not the tip) and a removed
+  inception are `Gap {missing: p}`; a wrong `p` at the successor `s`, a wrong `s` with the right
+  `p`, and a non-inception at `s` = 0 are `KelInvalid`. In a refreshed suffix each is
+  `HistoryRewritten`.
+- An empty KEL for an indexed prefix counts as the prefix being absent; a known prefix missing
+  from a new index keeps its validated KEL; the walk and fold decide.
+- Two fetched KELs resolving to one prefix, or a KEL whose validated prefix differs from the
+  index entry it was fetched for, refuse the sync, independent of order.
+- Lookup is among all group actions of the validated KELs: a `prev` or head found nowhere is a
+  `Gap`; one found in another group, and a genesis of another group, is `NotOnLine`.
+- Signing with a prefix that has no validated KEL in the view, or whose key is not a current key,
+  is `NotSigner {prefix}`; nothing is signed or sent.
+- `?after=` is checked before the hosted lookup (400 `badQuery` for an unhosted prefix too).
+- Resend at most 3 attempts; at most 5 sign rounds per action; a refusal other than a moved
+  head or tip ends the action after one post.

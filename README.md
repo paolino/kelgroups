@@ -23,8 +23,9 @@ the admin rules follow a Lean 4 model.
   re-checked when the database is opened
 - **Lean 4 model** — `lean/KelGroups/Sovereign`, generic KERI types from
   [keri-lean](https://github.com/paolino/keri-lean)
-- **PureScript client** — client library and Halogen reference UI
-  using [keri-purs](https://github.com/paolino/keri-purs)
+- **PureScript client** — fetches every member KEL of a group, validates each
+  locally, replays the group and signs only against a refusal-free view;
+  a read-only Halogen group viewer; built on [keri-purs](https://github.com/paolino/keri-purs)
 
 ## Components
 
@@ -33,8 +34,8 @@ the admin rules follow a Lean 4 model.
 | `lib/` | Haskell library: member KELs, group actions and membership, store, server |
 | `app/` | `kelgroups-server` executable (WAI/Warp + SQLite) |
 | `test/` | Hspec and QuickCheck invariants: rule, store and HTTP |
-| `client/kelgroups-client/` | PureScript client library |
-| `client/kelgroups-trivial/` | Halogen reference UI |
+| `client/kelgroups-client/` | PureScript client: KEL validation, group replay, sync, signing |
+| `client/kelgroups-trivial/` | Read-only group viewer (Halogen) |
 | `lean/` | Lean 4 model of the server and its theorems |
 
 ## Documentation
@@ -46,7 +47,7 @@ the admin rules follow a Lean 4 model.
 ## Quick start
 
 ```bash
-nix develop -c just ci                  # format + lint + build + test + lean + client
+nix develop -c just ci                  # format + lint + build + test + lean + client + e2e
 nix develop -c just serve               # port 8080, database kelgroups.db
 nix develop -c just serve 10001 my.db   # custom port and database
 kelgroups-server <port> <db>            # the executable itself

@@ -24,6 +24,7 @@ module Test.World
   , onOne
   , onTwo
   , genPair
+  , signerOf
   ) where
 
 import Prelude
@@ -36,6 +37,7 @@ import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Tuple (Tuple(..))
+import KelGroups.Client.Group (Signer)
 import Keri.Kel (SignedEvent)
 import Test.Fixtures
   ( Ident
@@ -269,3 +271,10 @@ genPair n = do
           go (k - 1) p'
   pair <- go n p1
   pure { team: t, pair }
+
+-- | The signer of an identity: its prefix and its first current key.
+signerOf :: String -> World -> Maybe Signer
+signerOf pfx w = do
+  id <- ident pfx w
+  kp <- Array.head id.current.pairs
+  pure { prefix: pfx, secretKey: kp.secretKey }

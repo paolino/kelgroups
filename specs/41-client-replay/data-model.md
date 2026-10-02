@@ -22,7 +22,7 @@
   `NotOnLine {digest}` · `RuleViolation {digest, class}` with the server's refusal class names
   (`notAMember`, `prevNotHead`, `notAnAdmin`, `memberNotHosted`, `alreadyMember`,
   `targetNotMember`, `alreadyAdmin`, `targetNotAdmin`, `lastAdmin`) · `HistoryRewritten {prefix, s}`
-  · `Transport {status, detail}`.
+  · `Transport {status, detail}` · `NotSigner {prefix}` (ruling in spec.md).
 - D6 Submission outcome: `Admitted {group, head, prefix, sn}` (200, also for an identical resend)
   · `Refused {status, error}` · `Unanswered` (attempts exhausted). A pending own action lives
   only in the outcome, never in a `ValidatedKel` or `GroupView` (R10).

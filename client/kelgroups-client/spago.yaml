@@ -25,4 +25,5 @@ package:
     main: Test.Main
     dependencies:
       - quickcheck
+      - refs
       - console

@@ -26,7 +26,8 @@ module KelGroups.Client.Group
   , Payload(..)
   , Action
   , Roster(..)
-  , GroupView(..)
+  , GroupView
+  , viewRecord
   , Signer
   , decodeAction
   , encodeAnchor
@@ -144,6 +145,13 @@ derive instance eqGroupView :: Eq GroupView
 instance showGroupView :: Show GroupView where
   show (GroupView v) =
     "GroupView " <> v.group <> " head=" <> v.head <> " " <> show v.roster
+
+-- | What a view holds, read-only: a `GroupView` is built only by
+-- | `replayGroup`.
+viewRecord
+  :: GroupView
+  -> { group :: GroupId, head :: Digest, chain :: Array Action, roster :: Roster, kels :: Map Prefix ValidatedKel }
+viewRecord (GroupView v) = v
 
 -- | Who signs: an identifier and its Ed25519 secret key (tweetnacl form).
 type Signer = { prefix :: Prefix, secretKey :: Uint8Array }

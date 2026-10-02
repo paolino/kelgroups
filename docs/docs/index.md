@@ -14,8 +14,8 @@ chain. The server holds no key: every action is signed by a member. The rules fo
 |---|---|---|
 | `kelgroups` | Haskell | Member KELs, group actions and membership, store, WAI application |
 | `kelgroups-server` | Haskell | Executable: `kelgroups-server <port> <db>` |
-| `kelgroups-client` | PureScript | Client-side KEL handling, API, and state |
-| `kelgroups-trivial` | PureScript | Halogen reference UI |
+| `kelgroups-client` | PureScript | Client: KEL validation, group replay, sync and signing against the server |
+| `kelgroups-trivial` | PureScript | Read-only group viewer (Halogen) |
 
 ## Dependencies
 

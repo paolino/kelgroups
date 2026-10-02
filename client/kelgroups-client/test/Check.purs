@@ -10,6 +10,7 @@ module Test.Check
   , effectful
   , check
   , checkAll
+  , setExitCode
   ) where
 
 import Prelude

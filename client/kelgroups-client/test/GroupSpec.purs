@@ -3,7 +3,7 @@
 -- | INV-41-LINE/unit. Every scenario is legitimately signed; expected
 -- | heads, chains, rosters and refusals come from the scenario's own
 -- | record (`Test.World`), never from the client.
-module Test.GroupSpec (checks) where
+module Test.GroupSpec (checks, matches) where
 
 import Prelude
 
@@ -18,7 +18,8 @@ import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
 import KelGroups.Client.Group
-  ( GroupView(..)
+  ( GroupView
+  , viewRecord
   , Payload(..)
   , Roster(..)
   , replayGroup
@@ -61,8 +62,9 @@ type Seen =
 
 -- | What a view shows.
 seen :: GroupView -> Seen
-seen (GroupView v) =
+seen gv =
   let
+    v = viewRecord gv
     Roster r = v.roster
   in
     { head: v.head
@@ -288,10 +290,11 @@ checks =
 -- | validated tip.
 signedFollowed :: World -> String -> Payload -> Intent -> Result
 signedFollowed w s p intent = case replay w (kels w) w.head, secretOf s w of
-  Right v@(GroupView vr), Just sg -> case signAction sg v p of
+  Right v, Just sg -> case signAction sg v p of
     Left r -> Failed ("not signed: " <> show r)
     Right se ->
       let
+        vr = viewRecord v
         w' = act s intent w
         ks = map (\(Tuple pf es) -> if pf == s then Tuple pf (Array.snoc es se) else Tuple pf es) (kels w)
         tip = case Map.lookup s vr.kels of
