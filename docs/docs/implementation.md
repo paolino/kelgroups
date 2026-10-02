@@ -24,12 +24,13 @@
 | `KelGroups.Kel.Codec` | JSON wire form of signed member KEL events |
 | `KelGroups.Kel.Store` | The database file: member KELs, re-checked on open; group action admission |
 | `KelGroups.Group` | Group actions, chains, membership and their admission (`admit`, `head`, `roster`, `membershipOk`) |
-| `KelGroups.Server` | WAI application: `POST /kel`, `GET /kel/<prefix>`, `POST /actions` |
+| `KelGroups.Server` | WAI application: `POST /kel`, `GET /kel/<prefix>[?after=<sn>]`, `POST /actions`, `GET /groups/<gid>` |
 | `KelGroups.Vote.Types`, `KelGroups.Vote.State` | Held app-scoped proposal substrate; used by nothing in the server |
 
 ### Server
 
-`kelApp` routes `POST /kel`, `GET /kel/<prefix>` and `POST /actions` (below). An unmatched GET or
+`kelApp` routes `POST /kel`, `GET /kel/<prefix>`, `POST /actions` and `GET /groups/<gid>`
+(below). An unmatched GET or
 HEAD goes to an optional fallback application; any other unmatched request answers 404. The
 removed group path (`POST /events`, `GET /events`, `GET /condition`, `GET /stream`, `GET /info`,
 the `?key=` guard) answers 404.
@@ -88,6 +89,7 @@ Interactions are group actions, admitted only through `POST /actions` (below).
 |---|---|---|
 | `/kel` | POST | Submit an inception or a rotation; 200 `{"prefix", "sn", "digest"}` |
 | `/kel/<prefix>` | GET | The hosted KEL, oldest first, each event with its signatures; 404 if unhosted |
+| `/kel/<prefix>?after=<sn>` | GET | The hosted events with `s` > `sn`, oldest first (`[]` past the tip); 400 `badQuery` unless `sn` is a canonical non-negative decimal (checked before the lookup); 404 if unhosted |
 
 Wire form of a signed event, the POST body and each element of the GET array:
 
@@ -113,6 +115,8 @@ thresholds in decimal; the GET array returns each event in that canonical byte f
 
 Refusal bodies are `{"error": <class>, "detail": <text>}`.
 
+Other query keys of `GET /kel/<prefix>` are ignored. A client that already holds a validated KEL
+up to `sn` fetches only `?after=<sn>` and checks that the answer extends its tip.
 ### Group actions
 
 A group action is an interaction event (`ixn`) in the signer's hosted KEL whose `a` holds
@@ -240,6 +244,112 @@ deciding: signer an admin, added identity hosted, target state, last-admin guard
 | grant of an admin; revoke of a non-admin | 409 | `alreadyAdmin`, `targetNotAdmin` |
 | the action would leave members and no admin | 409 | `lastAdmin` |
 
+### Group index
+
+`GET /groups/<gid>` tells a reader where a group's history lies: the head and, sorted by prefix
+without duplicates, every identity that signed an action of the group or was the target of an
+`add`, former members included, each with the tip of its KEL. It is derived in memory from the
+chain and the KELs of one committed state (`groupIndex`, `lookupGroup`); nothing is stored for
+it. It is not evidence: a reader fetches the KELs it names and re-checks everything.
+
+```haskell
+groupIndex :: Map Text MemberKel -> Chain -> GroupIndex
+lookupGroup :: MemberKels -> Text -> IO (Maybe GroupIndex)
+```
+
+```json
+{"head": "<digest>", "kels": [{"prefix": "<prefix>", "tip": "<digest>"}]}
+```
+
+| Refusal | Status | `error` |
+|---|---|---|
+| no group has this id | 404 | `noSuchGroup` |
+
+The read endpoints (`GET /kel/<prefix>`, `?after=`, `GET /groups/<gid>`) are open to anyone;
+reads for current members only are not implemented yet.
+
+## Client
+
+The PureScript client (`client/kelgroups-client`) holds no trust in the server: it fetches every
+member KEL of a group, re-checks each with the server's KERI rule, replays the group from the KELs
+alone, and signs only against a view that a sync produced without refusal. Two clients with the same
+KELs see the same group, whatever order the KELs arrive in.
+
+| Module | Role |
+|---|---|
+| `KelGroups.Client.Kel` | The wire form of a signed event and the KERI rule of `KelGroups.Kel` (`validateKel`, `extendKel`) |
+| `KelGroups.Client.Group` | Lean vocabulary (`Payload`, `Action`, `Roster`, `applyCore`, `roster`, `guardOk`, `membershipOk`), anchor wire form, `replayGroup`, `signAction` |
+| `KelGroups.Client.Sync` | The `Transport`, `sync` and refresh, `submit` with identical resend, `act` (sign, submit, re-sign on a stale head or tip) |
+| `KelGroups.Client.Api` | `httpTransport`: `GET /groups/<gid>`, `GET /kel/<prefix>[?after=<sn>]`, `POST /actions` over `fetch` |
+| `KelGroups.Client.Jwk` | Ed25519 key export and import as JWK |
+
+```purescript
+validateKel :: Array SignedEvent -> Either SyncRefusal ValidatedKel
+extendKel :: ValidatedKel -> Array SignedEvent -> Either SyncRefusal ValidatedKel
+replayGroup :: GroupId -> Digest -> Map Prefix ValidatedKel -> Either SyncRefusal GroupView
+signAction :: Signer -> GroupView -> Payload -> Either SyncRefusal SignedEvent
+sync :: Transport -> GroupId -> Maybe GroupView -> Aff (Either SyncRefusal GroupView)
+submit :: Transport -> SignedEvent -> Aff Submission
+act :: Transport -> Signer -> GroupView -> Payload -> Aff (Either SyncRefusal Submission)
+httpTransport :: String -> Transport
+```
+
+**Validation.** Every fetched KEL is checked event by event with the rule of
+[Member KELs](#member-kels): SAID, inception prefix and `s`, tip succession, next-key commitment,
+thresholds, no witnesses, revealed commitments, signatures at distinct indices of canonical keys
+meeting the threshold (a rotation also the prior `nt`). A failure refuses the sync as
+`KelInvalid {prefix, s, reason}`, the reason being the server's refusal class. An event whose `s` is
+past the successor of the tip while its `p` is not the tip, or a first event that is no inception
+past `s` 0, means events are missing: `Gap {missing: <its p>}`. An interaction that is not exactly
+one group anchor refuses its KEL (`notAGroupAction`).
+
+**Walk and fold.** From the index head, every `prev` is looked up among the group actions of the
+validated KELs back to the genesis whose `d` is the group id (Lean `ChainLine`); actions that extend
+the head are followed to the end of the line. A digest found nowhere is a `Gap`; an action of the
+group off that one line, a second action on one `prev`, or a `prev` (or head) in another group is
+`NotOnLine` (the smallest such digest). The roster is Lean `roster` over the line; each action must
+meet the group conditions of admission at its position (a current member signs, `membershipOk`, an
+added identity counting as hosted when its KEL is among the validated ones), else
+`RuleViolation {digest, class}` with the server's class. The result is a `GroupView`: group, head,
+chain, roster and the validated KELs.
+
+**Sync and refresh.** `sync` reads the group index, fetches every KEL it names (an empty answer counts
+as absent) and replays. A KEL must validate as the prefix it was fetched for, and the index must name
+each prefix once; otherwise the sync is refused, so no answer can stand in for another KEL. With a previous view it refreshes: a KEL whose tip did not move is kept, a
+moved one is fetched as `?after=<local s>` only and must extend the local tip and pass the rule, else
+`HistoryRewritten {prefix, s}`; a new prefix is fetched whole; a known prefix the index no longer
+names is kept. Validated history is never fetched again. A failed or refused read is
+`Transport {status, detail}`; no refusal yields a view.
+
+**Signing and retry.** `signAction` signs an interaction on the signer's validated tip (`p`) whose
+anchor extends the view head (`prev`), with the signer's key at its index among the current keys;
+a signer whose KEL is not in the view, or whose key is not current, signs nothing (`NotSigner`).
+`submit` posts it and, when no answer arrives, resends the identical bytes (three attempts in all);
+the server answers an identical resend as its admission, so the action lands once. `act` signs,
+submits and, on a 409 `prevNotHead` or `notTipSuccessor`, refreshes, re-validates and signs again
+against the new head and tip (five rounds at most); any refusal of the refresh stops it with nothing
+more sent. An answer changes nothing locally: an own action becomes history (usable as `p`, counted
+in the view) only once a later sync sees it in the server's KEL and on the chain.
+
+| `SyncRefusal` | When |
+|---|---|
+| `KelInvalid {prefix, s, reason}` | a fetched KEL breaks the KERI rule, or holds a non-group interaction |
+| `Gap {missing}` | a digest the walk or a KEL needs is nowhere in the fetched KELs |
+| `NotOnLine {digest}` | an action of the group is on no single line from its genesis |
+| `RuleViolation {digest, class}` | an action breaks the group conditions at its position |
+| `HistoryRewritten {prefix, s}` | a refreshed suffix does not extend the local tip or breaks the rule |
+| `NotSigner {prefix}` | no usable signing key for the view |
+| `Transport {status, detail}` | a read failed or was refused |
+
+`client/kelgroups-trivial` is a read-only group viewer over `sync` and `httpTransport`: a group id,
+then the head, the roster and the chain, or the refusal with its missing digest. It holds no key;
+signing and key custody are not part of it.
+
+Not established by replay: a server that serves a consistent stale snapshot (an old head with the
+KELs cut after it) cannot be told from an honest one. Anchor application data is re-serialized as
+received; data whose JSON form differs between aeson and the browser (for example `1.0`) fails SAID
+verification and refuses the sync.
+
 ## Lean 4 Model
 
 Digests, SAIDs and signatures (`KERI.Crypto`) are imported from
@@ -272,10 +382,27 @@ Events are built by legitimate signing with real Ed25519 keys and next-key commi
 | `GroupSpec`, `GroupStoreSpec`, `GroupServerSpec` | Group action admission: rule, store (concurrency, retry, atomicity, reopen), `POST /actions` |
 | `GroupMembershipSpec`, `GroupMembershipStoreSpec`, `GroupMembershipServerSpec` | Membership and admin rules: generated sequences against an oracle of the rules, store, `POST /actions` |
 | `ServerIdentitySpec` | The server holds no key |
+| `GroupIndexServerSpec` | `GET /groups/<gid>` and `GET /kel/<prefix>?after=<sn>` over generated membership runs |
+
+The client checks (`client/kelgroups-client/test`) print one line per invariant ID and layer,
+`PASS <ID>/<layer> <description> cases=<n>` or a line starting `FAIL ` (the run then exits non-zero):
+`/unit` on legitimately signed fixtures, `/e2e` against a real `kelgroups-server` on a fresh database
+that the suite builds through `POST /kel` and `POST /actions`; adversarial `/e2e` cases wrap the real
+HTTP transport and remove an event from a real KEL answer, a prefix from a real index, or lose an
+answer after the server received the request.
+
+| Test module | Scope |
+|---|---|
+| `KelSpec` | `INV-41-KEL/unit`: every clause of the KERI rule on inception, rotation and interaction; non-group interactions |
+| `GroupSpec` | `INV-41-SAME/unit`, `INV-41-GAP/unit`, `INV-41-RULE/unit`, `INV-41-LINE/unit`: replay over generated one- and two-group KEL sets |
+| `SyncSpec` | `INV-41-OWN/unit`, `INV-41-REWRITE/unit`: sync, refresh and own history against an in-memory stand-in for the server |
+| `E2ESpec` | `INV-41-SAME/e2e`, `INV-41-GAP/e2e`, `INV-41-RETRY/e2e`, `INV-41-RACE/e2e`, `INV-41-OWN/e2e` against the real server |
+| `JwkSpec` | Key export and import as JWK |
 
 ## CI
 
-- **Build + Test**: `nix develop -c just ci` (format, cabal-fmt, lint, build, test, lean, client)
+- **Build + Test**: `nix develop .#ci -c just ci` (format, cabal-fmt, lint, build, test, lean, client build,
+  client checks, client end-to-end suite against the server)
 - **Docs**: MkDocs deployed to GitHub Pages on push to main
 
 ## Justfile Recipes
@@ -290,8 +417,10 @@ Events are built by legitimate signing with real Ed25519 keys and next-key commi
 | `lean` | `cd lean && lake build` |
 | `build-client` | `cd client && npm install && spago build` |
 | `bundle-client` | build + bundle PureScript client |
-| `test-client` | `cd client && spago -x test.dhall test` |
-| `ci` | format + cabal-fmt + lint + build + test + lean + client |
+| `test-client` | `cd client && spago test -p kelgroups-client` (unit checks) |
+| `e2e-client` | build and start `kelgroups-server` on a fresh database and a free port (or `$E2E_CLIENT_PORT`), check the socket on that port belongs to it, run the end-to-end suite against it, stop it |
+| `e2e-client-against <url>` | run the end-to-end suite against a server at `<url>`; an empty `<url>` fails |
+| `ci` | format + cabal-fmt + lint + build + test + lean + build-client + test-client + e2e-client |
 | `docs` | `mkdocs build` |
 | `serve` | `cabal run kelgroups-server -O0 -- <port> <db>` |
 | `clean` | cabal clean + lake clean |

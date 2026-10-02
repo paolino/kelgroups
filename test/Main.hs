@@ -6,6 +6,7 @@ License     : Apache-2.0
 -}
 module Main (main) where
 
+import GroupIndexServerSpec qualified
 import GroupMembershipServerSpec qualified
 import GroupMembershipSpec qualified
 import GroupMembershipStoreSpec qualified
@@ -30,3 +31,4 @@ main = hspec $ do
     GroupMembershipStoreSpec.spec
     GroupMembershipServerSpec.spec
     ServerIdentitySpec.spec
+    GroupIndexServerSpec.spec

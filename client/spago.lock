@@ -30,7 +30,8 @@
         "test": {
           "dependencies": [
             "console",
-            "quickcheck"
+            "quickcheck",
+            "refs"
           ]
         }
       },
