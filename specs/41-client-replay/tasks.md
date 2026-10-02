@@ -6,8 +6,8 @@ C1 `feat: group index and KEL suffix read endpoints`
 - [x] T001 M1 F1–F2, routes, INV-41-INDEX/http, INV-41-AFTER/http; docs endpoints
 
 C2 `feat: client validation, replay and fold of the group`
-- [ ] T002 M2 F3–F4, INV-41-KEL/unit
-- [ ] T003 M3 F5–F6, INV-41-GAP/unit, INV-41-SAME/unit, INV-41-RULE/unit, INV-41-LINE/unit
+- [x] T002 M2 F3–F4, INV-41-KEL/unit
+- [x] T003 M3 F5–F6, INV-41-GAP/unit, INV-41-SAME/unit, INV-41-RULE/unit, INV-41-LINE/unit
 
 C3 `feat!: client sync against the server, replacing the L1/L2 client`
 - [ ] T004 M4–M5 F7–F11, INV-41-REWRITE/unit, INV-41-OWN/unit

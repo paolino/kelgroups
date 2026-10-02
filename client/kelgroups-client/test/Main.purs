@@ -3,10 +3,14 @@ module Test.Main where
 import Prelude
 
 import Effect (Effect)
+import Effect.Aff (launchAff_)
 import Effect.Console (log)
+import Test.Check (checkAll)
 import Test.FoldSpec as FoldSpec
+import Test.GroupSpec as GroupSpec
 import Test.InvariantsSpec as InvariantsSpec
 import Test.JwkSpec as JwkSpec
+import Test.KelSpec as KelSpec
 import Test.TransitionInvariantsSpec as TransitionInvariantsSpec
 
 main :: Effect Unit
@@ -23,4 +27,5 @@ main = do
   log "=== JWK Key Export/Import ==="
   JwkSpec.run
   log ""
-  log "=== All properties passed ==="
+  log "=== Client validation, replay and fold ==="
+  launchAff_ $ void $ checkAll (KelSpec.checks <> GroupSpec.checks)
