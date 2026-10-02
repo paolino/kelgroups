@@ -39,11 +39,13 @@ The old passphrase bootstrap and majority voting are gone with the whole L1/L2 g
   refuses to open on a violation.
 - R6 Old path removed (desk ruling t39 A-001; swap rule): `POST /events`, `GET /events`,
   `GET /condition`, `GET /stream`, `GET /info` and the `?key=` guard; modules
-  `KelGroups.{Store,Fold,State,Validate,Event,Vote.State,Vote.Types,Bootstrap,Trivial,Types,
-  Server.JSON}` and their tests; `mkApp`/`ServerEnv` in `KelGroups.Server`. The member KEL
+  `KelGroups.{Store,Fold,State,Validate,Event,Bootstrap,Trivial,Types,Server.JSON}` and
+  their tests; `mkApp`/`ServerEnv` in `KelGroups.Server`. The member KEL
   store owns the SQLite connection: it opens the database file itself and creates only its
   own table. Old tables in an existing file are neither read nor dropped (clean break, no
-  migration). The executable takes `<port> <db>`; `just serve`/`restart` and the docker image
+  migration). `KelGroups.Vote.{Types,State}` (the held #30 substrate, merged with #35, importing
+  only `Data.Text`) and `specs/30-vote-substrate` are not part of the old path and are kept
+  unchanged. The executable takes `<port> <db>`; `just serve`/`restart` and the docker image
   follow. Static files of the client are still served as the fallback.
 - R7 Lean: the old model modules (`KelGroups.{Basic,KEL,Validate,Transitions,Invariants,
   FoldInvariants,KELInvariants,TransitionInvariants,ValidateInvariants}`) are deleted;
@@ -104,8 +106,9 @@ KEL store, not weakened.
 
 ## Out of scope (named residuals)
 
-- Held app-level work #29, #30, #33 builds on the deleted `KelGroups.Vote.*` modules; it is
-  not resumed or adapted here and must be re-cut against the action substrate.
+- Held app-level work #29, #30, #33 is not resumed or adapted here. Its substrate
+  `KelGroups.Vote.*` (#35) stays in the library, used by nothing in the server; its fate is an
+  operator decision outside this milestone. The old-path modules it was built beside are gone.
 - Client: `client/kelgroups-client` `Api.purs` and the trivial UI call the removed endpoints;
   they break at runtime until #41/#42. Client CI (compile + unit specs, no HTTP) stays green.
 - `docs/docs/roadmap.md` still describes the pre-#40 design; not refreshed here.
