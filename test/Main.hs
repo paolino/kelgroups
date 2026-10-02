@@ -8,6 +8,9 @@ module Main (main) where
 
 import E2ESpec qualified
 import FoldSpec qualified
+import GroupServerSpec qualified
+import GroupSpec qualified
+import GroupStoreSpec qualified
 import InvariantsSpec qualified
 import MemberKelServerSpec qualified
 import MemberKelSpec qualified
@@ -31,6 +34,9 @@ main = hspec $ do
     MemberKelSpec.spec
     MemberKelStoreSpec.spec
     MemberKelServerSpec.spec
+    GroupSpec.spec
+    GroupStoreSpec.spec
+    GroupServerSpec.spec
     ServerIdentitySpec.spec
     describe "INV-38-OLD-PATH: the old group path without a server key" $ do
         StoreSpec.spec

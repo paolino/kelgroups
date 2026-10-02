@@ -44,6 +44,7 @@ import Data.Text.Read qualified as TR
 import KelGroups.Bootstrap (AuthMode (..), authMode)
 import KelGroups.Event (GroupEvent (..), Proposal (..))
 import KelGroups.Fold (AppFold)
+import KelGroups.Group (Admission (..), GroupRefusal (..))
 import KelGroups.Kel
     ( KelRefusal (..)
     , kelEvents
@@ -53,6 +54,7 @@ import KelGroups.Kel qualified as Kel
 import KelGroups.Kel.Codec (decodeSignedEvent, encodeSignedEvent)
 import KelGroups.Kel.Store
     ( MemberKels
+    , admitAction
     , lookupMemberKel
     , submitMemberEvent
     )
@@ -168,15 +170,16 @@ mkApp env mFallback req respond =
                     jsonResponse status404 $
                         BadRequest "not found"
 
-{- | The member KEL endpoints, @POST /kel@ and
-@GET /kel/<prefix>@. Unmatched routes are passed to the
-optional fallback application, or return 404.
+{- | The member KEL endpoints, @POST /kel@ and @GET /kel/<prefix>@,
+and group action admission, @POST /actions@. Unmatched routes are
+passed to the optional fallback application, or return 404.
 -}
 kelApp :: MemberKels -> Maybe Application -> Application
 kelApp kels mFallback req respond =
     case (requestMethod req, pathInfo req) of
         ("POST", ["kel"]) -> handlePostKel kels req respond
         ("GET", ["kel", pfx]) -> handleGetKel kels pfx respond
+        ("POST", ["actions"]) -> handlePostAction kels req respond
         _ -> case mFallback of
             Just fallback -> fallback req respond
             Nothing ->
@@ -229,6 +232,59 @@ handleGetKel kels pfx respond = do
             responseLBS status200 jsonHeaders $
                 Encoding.encodingToLazyByteString $
                     Encoding.list encodeSignedEvent (kelEvents kel)
+
+-- --------------------------------------------------------
+-- POST /actions
+-- --------------------------------------------------------
+
+{- | Admit a group action: a signed interaction in the wire form of
+@POST /kel@. 200 with the group, its new head, the signer and the
+event's sequence number, also for an identical retry; otherwise the
+refusal status of 'groupRefusalStatus', nothing stored.
+-}
+handlePostAction :: MemberKels -> Application
+handlePostAction kels req respond = do
+    body <- strictRequestBody req
+    case eitherDecode body >>= decodeSignedEvent of
+        Left err ->
+            respond $ refusalResponse status400 "notDecodable" (T.pack err)
+        Right se -> do
+            r <- admitAction kels se
+            respond $ case r of
+                Left refusal ->
+                    refusalResponse
+                        (groupRefusalStatus refusal)
+                        (groupRefusalName refusal)
+                        (T.pack (show refusal))
+                Right adm ->
+                    responseLBS status200 jsonHeaders $
+                        encode $
+                            object
+                                [ "group" .= admittedGroup adm
+                                , "head" .= admittedHead adm
+                                , "prefix" .= admittedPrefix adm
+                                , "sn" .= admittedSn adm
+                                ]
+
+-- | HTTP status of a group action refusal (data model D4).
+groupRefusalStatus :: GroupRefusal -> Status
+groupRefusalStatus = \case
+    NotAGroupAction _ -> status400
+    KelRefused r -> refusalStatus r
+    NoSuchGroup -> status404
+    NotAMember -> status403
+    PrevNotHead -> status409
+    GroupExists -> status409
+
+-- | Stable machine-readable name of a group action refusal.
+groupRefusalName :: GroupRefusal -> Text
+groupRefusalName = \case
+    NotAGroupAction _ -> "notAGroupAction"
+    KelRefused r -> refusalName r
+    NoSuchGroup -> "noSuchGroup"
+    NotAMember -> "notAMember"
+    PrevNotHead -> "prevNotHead"
+    GroupExists -> "groupExists"
 
 -- | HTTP status of a refusal (data model D4).
 refusalStatus :: KelRefusal -> Status

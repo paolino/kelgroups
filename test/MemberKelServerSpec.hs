@@ -10,7 +10,16 @@ Drives the member KEL endpoints through warp and http-client,
 against a member KEL store on a real SQLite file. Status codes
 and refusal classes are those of data model D4.
 -}
-module MemberKelServerSpec (spec) where
+module MemberKelServerSpec
+    ( spec
+    , Srv (..)
+    , request
+    , postKel
+    , getKel
+    , hostAll
+    , fetched
+    , refused
+    ) where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (mapConcurrently)

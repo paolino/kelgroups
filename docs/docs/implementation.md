@@ -31,7 +31,8 @@
 | `KelGroups.Store` | SQLite-backed KEL store with KERI events and digest chain |
 | `KelGroups.Kel` | Member KELs and the KERI rule on append (`host`, `rotate`, `tip`) |
 | `KelGroups.Kel.Codec` | JSON wire form of signed member KEL events |
-| `KelGroups.Kel.Store` | Member KELs in the server database, re-checked on open |
+| `KelGroups.Kel.Store` | Member KELs in the server database, re-checked on open; group action admission |
+| `KelGroups.Group` | Group actions, chains, membership and their admission (`admit`, `head`, `roster`) |
 | `KelGroups.Server` | WAI application: routing, KERI event construction, SSE streaming |
 | `KelGroups.Server.JSON` | Orphan `ToJSON`/`FromJSON` instances + HTTP types (`Submission`, `AppendResult`, `ServerError`) |
 
@@ -190,8 +191,8 @@ a next-key commitment.
 database (prefix, sequence number, canonical event bytes, signatures, digest; unique on prefix
 and sequence number). A submission is decided under an append lock: a refusal writes nothing; an
 acceptance is one INSERT, and memory is updated after it commits. Opening the database replays
-every stored KEL through the rule and refuses to open on a violation. Interactions are part of
-the rule (for group admission) but no endpoint accepts them yet.
+every stored KEL through the rule and refuses to open on a violation. Interactions are group
+actions, admitted only through `POST /actions` (below).
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -221,6 +222,76 @@ thresholds in decimal; the GET array returns each event in that canonical byte f
 | inception of a hosted prefix; `p`/`s` not the tip's successor | 409 | `alreadyHosted`, `notTipSuccessor` |
 
 Refusal bodies are `{"error": <class>, "detail": <text>}`.
+
+### Group actions
+
+A group action is an interaction event (`ixn`) in the signer's hosted KEL whose `a` holds
+exactly one group anchor. The signer is the event's `i`, its KEL link the event's `p`; the
+anchor names the group, the payload and `prev`, the digest of the group head the action
+extends. The group chain is nothing but those `prev` links; the server's per-group head is an
+index derived from the admitted interactions, never stored apart.
+
+```json
+{"payload": {"t": "genesis"}}
+{"group": "<group id>", "prev": "<head digest>", "payload": {"t": "app", "data": <any JSON>}}
+```
+
+A genesis names no group and no `prev`: its group id is the genesis event's own `d`, and its
+signer becomes the sole member and admin. `app` payloads are opaque and leave the roster
+unchanged. The other core payloads (add, remove, grant, revoke, leave) are not decodable yet.
+Any other shape — no anchor, two anchors, an extra key, an unknown payload tag, a genesis with
+`group` or `prev`, a non-genesis without either — is not a group action.
+
+```haskell
+decodeAction :: SignedEvent -> Either GroupRefusal Action
+admit :: Hosted -> SignedEvent -> Either GroupRefusal (Hosted, Admission)
+retried :: Hosted -> SignedEvent -> Maybe Admission
+head :: Chain -> Text
+roster :: Chain -> Roster
+applyCore :: Roster -> Action -> Roster
+rebuildChains :: Map Text MemberKel -> Either String (Map Text Chain)
+
+admitAction :: MemberKels -> SignedEvent -> IO (Either GroupRefusal Admission)
+lookupChain :: MemberKels -> Text -> IO (Maybe Chain)
+```
+
+`KelGroups.Group` is pure and uses the Lean model's words (`Action`, `Payload`, `head`,
+`roster`, `applyCore`, `admit`; `Hosted` is the model's `State`). `admit` applies the KEL rule
+for an interaction to the signer's hosted KEL, then the group conditions: a genesis needs an
+unused group id; any other action needs an existing group, a signer who is a current member,
+and `prev` equal to the head. An admitted action is appended to the signer's KEL and to its
+group's chain in one step.
+
+`KelGroups.Kel.Store` admits under the same lock as `POST /kel`, so a rotation and an action
+of one member never interleave. The KELs and chains are one in-memory value: an admission is
+one INSERT of the interaction row, then that value is replaced, both under
+`uninterruptibleMask_`, so a write failure or an asynchronous exception leaves the KEL tip and
+the group head both advanced or both unchanged. A submission whose event and signatures are
+already in the signer's KEL is a retry: it answers the original success body and stores
+nothing. Opening the database rebuilds every chain from the hosted KELs and refuses to open if
+an interaction is not a group action, or a group is not one `prev`-linked line from its genesis
+whose every signer was a member at its position.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/actions` | POST | Admit a signed group action (wire form of `POST /kel`); 200 `{"group", "head", "prefix", "sn"}`, the same body for an identical retry |
+
+Checks run in this order and the first failure decides the answer: decode, retry, signer
+hosted, the KEL rule (SAID, `i`/`p`/`s` against the tip, signatures), then the group
+conditions. A refusal stores nothing.
+
+| Refusal | Status | `error` |
+|---|---|---|
+| body or event not decodable | 400 | `notDecodable` |
+| not exactly one well-formed group anchor | 400 | `notAGroupAction` |
+| not an interaction | 422 | `unexpectedEventKind` |
+| SAID mismatch; signatures invalid or under threshold | 422 | `saidMismatch`, `invalidSignatures` |
+| signer not hosted; group id with no chain | 404 | `unhosted`, `noSuchGroup` |
+| signer not a current member | 403 | `notAMember` |
+| `p`/`s` not the tip's successor; `prev` not the head; genesis of an existing id | 409 | `notTipSuccessor`, `prevNotHead`, `groupExists` |
+
+A refused action is void: the member re-reads its tip and the head and signs again. A write
+failure answers 500 and stores nothing.
 
 ## Lean 4 Proofs
 
