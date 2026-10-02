@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 {- |
 Module      : KelGroups.Server
 Description : HTTP server for kelgroups (WAI application)
@@ -5,8 +7,12 @@ Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 WAI application over the member KEL store: @POST /kel@ and
-@GET /kel/<prefix>@ host and serve member KELs, @POST /actions@
-admits group actions. Every refusal answers its status and
+@GET /kel/<prefix>[?after=<sn>]@ host and serve member KELs (the
+whole KEL, or the events after a sequence number), @POST /actions@
+admits group actions and @GET /groups/<gid>@ answers the group
+index: its head and the KEL tips of everyone who signed an action of
+the group or was added to it. The reads are not evidence; a client
+re-checks every event it fetches. Every refusal answers its status and
 @{"error": <class>, "detail": <text>}@ and stores nothing.
 -}
 module KelGroups.Server
@@ -18,9 +24,15 @@ import Data.Aeson.Encoding qualified as Encoding
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Text qualified as T
-import KelGroups.Group (Admission (..), GroupRefusal (..))
+import Data.Text.Encoding qualified as TE
+import KelGroups.Group
+    ( Admission (..)
+    , GroupIndex (..)
+    , GroupRefusal (..)
+    )
 import KelGroups.Kel
     ( KelRefusal (..)
+    , MemberKel
     , kelEvents
     , kelPrefix
     )
@@ -29,6 +41,7 @@ import KelGroups.Kel.Codec (decodeSignedEvent, encodeSignedEvent)
 import KelGroups.Kel.Store
     ( MemberKels
     , admitAction
+    , lookupGroup
     , lookupMemberKel
     , submitMemberEvent
     )
@@ -49,15 +62,18 @@ import Network.HTTP.Types
     )
 import Network.Wai
     ( Application
+    , Request
     , Response
     , pathInfo
+    , queryString
     , requestMethod
     , responseLBS
     , strictRequestBody
     )
 
 {- | The member KEL endpoints, @POST /kel@ and @GET /kel/<prefix>@,
-and group action admission, @POST /actions@. An unmatched GET or
+group action admission, @POST /actions@, and the group index,
+@GET /groups/<gid>@. An unmatched GET or
 HEAD is passed to the optional fallback application (the static
 client files); any other unmatched request answers 404.
 -}
@@ -65,7 +81,8 @@ kelApp :: MemberKels -> Maybe Application -> Application
 kelApp kels mFallback req respond =
     case (requestMethod req, pathInfo req) of
         ("POST", ["kel"]) -> handlePostKel kels req respond
-        ("GET", ["kel", pfx]) -> handleGetKel kels pfx respond
+        ("GET", ["kel", pfx]) -> handleGetKel kels pfx req respond
+        ("GET", ["groups", g]) -> handleGetGroup kels g respond
         ("POST", ["actions"]) -> handlePostAction kels req respond
         _ -> case mFallback of
             Just fallback
@@ -111,20 +128,81 @@ handlePostKel kels req respond = do
                                 , "digest" .= Kel.tip kel
                                 ]
 
--- | The hosted KEL, oldest first, in the wire form; 404 if unhosted.
-handleGetKel :: MemberKels -> Text -> (Response -> IO b) -> IO b
-handleGetKel kels pfx respond = do
-    mkel <- lookupMemberKel kels pfx
-    respond $ case mkel of
+{- | The hosted KEL, oldest first, in the wire form: the whole KEL,
+or with @?after=<sn>@ the events whose @s@ is above @sn@ (none past
+the tip). 400 @badQuery@ when @after@ is not a canonical decimal,
+checked before the lookup; 404 if unhosted. Other query keys are
+ignored.
+-}
+handleGetKel
+    :: MemberKels -> Text -> Request -> (Response -> IO b) -> IO b
+handleGetKel kels pfx req respond =
+    case traverse canonicalSn (lookup "after" (queryString req)) of
+        Nothing ->
+            respond $
+                refusalResponse
+                    status400
+                    "badQuery"
+                    "after: not a canonical decimal sequence number"
+        Just after -> do
+            mkel <- lookupMemberKel kels pfx
+            respond $ case mkel of
+                Nothing ->
+                    refusalResponse
+                        status404
+                        (refusalName Unhosted)
+                        (T.pack (show Unhosted))
+                Just kel ->
+                    responseLBS status200 jsonHeaders $
+                        Encoding.encodingToLazyByteString $
+                            Encoding.list encodeSignedEvent $
+                                maybe (kelEvents kel) (`kelAfter` kel) after
+
+-- | The events of a KEL whose @s@ is above @sn@, oldest first.
+kelAfter :: Int -> MemberKel -> [SignedEvent]
+kelAfter sn = filter ((> sn) . eventSequenceNumber . event) . kelEvents
+
+{- | A non-negative 'Int' in canonical decimal, as the thresholds of
+"KelGroups.Kel.Codec"; a key without a value is none.
+-}
+canonicalSn :: Maybe ByteString -> Maybe Int
+canonicalSn mv = do
+    t <- either (const Nothing) Just . TE.decodeUtf8' =<< mv
+    case reads (T.unpack t) :: [(Integer, String)] of
+        [(n, "")]
+            | n >= 0
+            , n <= toInteger (maxBound :: Int)
+            , T.pack (show n) == t ->
+                Just (fromInteger n)
+        _ -> Nothing
+
+-- --------------------------------------------------------
+-- GET /groups/<gid>
+-- --------------------------------------------------------
+
+{- | The group index: 200 with the head and, sorted by prefix, every
+signer of an action of the group and every identity added to it with
+its KEL tip; 404 @noSuchGroup@ for an id that is no group.
+-}
+handleGetGroup :: MemberKels -> Text -> (Response -> IO b) -> IO b
+handleGetGroup kels g respond = do
+    mindex <- lookupGroup kels g
+    respond $ case mindex of
         Nothing ->
             refusalResponse
-                status404
-                (refusalName Unhosted)
-                (T.pack (show Unhosted))
-        Just kel ->
+                (groupRefusalStatus NoSuchGroup)
+                (groupRefusalName NoSuchGroup)
+                (T.pack (show NoSuchGroup))
+        Just GroupIndex{indexHead, indexKels} ->
             responseLBS status200 jsonHeaders $
-                Encoding.encodingToLazyByteString $
-                    Encoding.list encodeSignedEvent (kelEvents kel)
+                encode $
+                    object
+                        [ "head" .= indexHead
+                        , "kels"
+                            .= [ object ["prefix" .= pfx, "tip" .= t]
+                               | (pfx, t) <- indexKels
+                               ]
+                        ]
 
 -- --------------------------------------------------------
 -- POST /actions

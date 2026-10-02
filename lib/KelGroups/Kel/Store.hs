@@ -32,6 +32,7 @@ module KelGroups.Kel.Store
     , lookupMemberKel
     , admitAction
     , lookupChain
+    , lookupGroup
     ) where
 
 import Control.Concurrent.MVar (MVar, newMVar, withMVar)
@@ -65,9 +66,11 @@ import Database.SQLite.Simple
 import KelGroups.Group
     ( Admission
     , Chain
+    , GroupIndex
     , GroupRefusal
     , Hosted (..)
     , admit
+    , groupIndex
     , rebuildChains
     , retried
     )
@@ -189,6 +192,14 @@ lookupMemberKel MemberKels{mksHosted} pfx =
 lookupChain :: MemberKels -> Text -> IO (Maybe Chain)
 lookupChain MemberKels{mksHosted} g =
     Map.lookup g . hostedChains <$> readTVarIO mksHosted
+
+{- | The index of a group id, its head and tips read from one
+committed state.
+-}
+lookupGroup :: MemberKels -> Text -> IO (Maybe GroupIndex)
+lookupGroup MemberKels{mksHosted} g = do
+    Hosted{hostedKels, hostedChains} <- readTVarIO mksHosted
+    pure $ groupIndex hostedKels <$> Map.lookup g hostedChains
 
 {- | Store an accepted event and publish the state it leads to.
 Called under the lock with a state decided from the published one.

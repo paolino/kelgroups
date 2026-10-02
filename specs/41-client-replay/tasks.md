@@ -3,7 +3,7 @@
 ## S1 (OWNER)
 
 C1 `feat: group index and KEL suffix read endpoints`
-- [ ] T001 M1 F1–F2, routes, INV-41-INDEX/http, INV-41-AFTER/http; docs endpoints
+- [x] T001 M1 F1–F2, routes, INV-41-INDEX/http, INV-41-AFTER/http; docs endpoints
 
 C2 `feat: client validation, replay and fold of the group`
 - [ ] T002 M2 F3–F4, INV-41-KEL/unit

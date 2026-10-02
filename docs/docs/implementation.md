@@ -24,12 +24,13 @@
 | `KelGroups.Kel.Codec` | JSON wire form of signed member KEL events |
 | `KelGroups.Kel.Store` | The database file: member KELs, re-checked on open; group action admission |
 | `KelGroups.Group` | Group actions, chains, membership and their admission (`admit`, `head`, `roster`, `membershipOk`) |
-| `KelGroups.Server` | WAI application: `POST /kel`, `GET /kel/<prefix>`, `POST /actions` |
+| `KelGroups.Server` | WAI application: `POST /kel`, `GET /kel/<prefix>[?after=<sn>]`, `POST /actions`, `GET /groups/<gid>` |
 | `KelGroups.Vote.Types`, `KelGroups.Vote.State` | Held app-scoped proposal substrate; used by nothing in the server |
 
 ### Server
 
-`kelApp` routes `POST /kel`, `GET /kel/<prefix>` and `POST /actions` (below). An unmatched GET or
+`kelApp` routes `POST /kel`, `GET /kel/<prefix>`, `POST /actions` and `GET /groups/<gid>`
+(below). An unmatched GET or
 HEAD goes to an optional fallback application; any other unmatched request answers 404. The
 removed group path (`POST /events`, `GET /events`, `GET /condition`, `GET /stream`, `GET /info`,
 the `?key=` guard) answers 404.
@@ -88,6 +89,7 @@ Interactions are group actions, admitted only through `POST /actions` (below).
 |---|---|---|
 | `/kel` | POST | Submit an inception or a rotation; 200 `{"prefix", "sn", "digest"}` |
 | `/kel/<prefix>` | GET | The hosted KEL, oldest first, each event with its signatures; 404 if unhosted |
+| `/kel/<prefix>?after=<sn>` | GET | The hosted events with `s` > `sn`, oldest first (`[]` past the tip); 400 `badQuery` unless `sn` is a canonical non-negative decimal (checked before the lookup); 404 if unhosted |
 
 Wire form of a signed event, the POST body and each element of the GET array:
 
@@ -113,6 +115,8 @@ thresholds in decimal; the GET array returns each event in that canonical byte f
 
 Refusal bodies are `{"error": <class>, "detail": <text>}`.
 
+Other query keys of `GET /kel/<prefix>` are ignored. A client that already holds a validated KEL
+up to `sn` fetches only `?after=<sn>` and checks that the answer extends its tip.
 ### Group actions
 
 A group action is an interaction event (`ixn`) in the signer's hosted KEL whose `a` holds
@@ -240,6 +244,30 @@ deciding: signer an admin, added identity hosted, target state, last-admin guard
 | grant of an admin; revoke of a non-admin | 409 | `alreadyAdmin`, `targetNotAdmin` |
 | the action would leave members and no admin | 409 | `lastAdmin` |
 
+### Group index
+
+`GET /groups/<gid>` tells a reader where a group's history lies: the head and, sorted by prefix
+without duplicates, every identity that signed an action of the group or was the target of an
+`add`, former members included, each with the tip of its KEL. It is derived in memory from the
+chain and the KELs of one committed state (`groupIndex`, `lookupGroup`); nothing is stored for
+it. It is not evidence: a reader fetches the KELs it names and re-checks everything.
+
+```haskell
+groupIndex :: Map Text MemberKel -> Chain -> GroupIndex
+lookupGroup :: MemberKels -> Text -> IO (Maybe GroupIndex)
+```
+
+```json
+{"head": "<digest>", "kels": [{"prefix": "<prefix>", "tip": "<digest>"}]}
+```
+
+| Refusal | Status | `error` |
+|---|---|---|
+| no group has this id | 404 | `noSuchGroup` |
+
+The read endpoints (`GET /kel/<prefix>`, `?after=`, `GET /groups/<gid>`) are open to anyone;
+reads for current members only are not implemented yet.
+
 ## Lean 4 Model
 
 Digests, SAIDs and signatures (`KERI.Crypto`) are imported from
@@ -272,6 +300,7 @@ Events are built by legitimate signing with real Ed25519 keys and next-key commi
 | `GroupSpec`, `GroupStoreSpec`, `GroupServerSpec` | Group action admission: rule, store (concurrency, retry, atomicity, reopen), `POST /actions` |
 | `GroupMembershipSpec`, `GroupMembershipStoreSpec`, `GroupMembershipServerSpec` | Membership and admin rules: generated sequences against an oracle of the rules, store, `POST /actions` |
 | `ServerIdentitySpec` | The server holds no key |
+| `GroupIndexServerSpec` | `GET /groups/<gid>` and `GET /kel/<prefix>?after=<sn>` over generated membership runs |
 
 ## CI
 

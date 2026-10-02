@@ -53,6 +53,10 @@ module KelGroups.Group
     , guardOk
     , membershipOk
 
+      -- * Group index
+    , GroupIndex (..)
+    , groupIndex
+
       -- * Admission
     , Hosted (..)
     , Admission (..)
@@ -72,6 +76,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (listToMaybe)
 import Data.Sequence (Seq, ViewR (..), viewr, (|>))
 import Data.Sequence qualified as Seq
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import KelGroups.Kel
@@ -80,6 +85,7 @@ import KelGroups.Kel
     , appendInteraction
     , kelEvents
     )
+import KelGroups.Kel qualified as Kel
 import KelGroups.Kel.Codec (exactKeys)
 import Keri.Event
     ( Event (..)
@@ -316,6 +322,39 @@ membershipOk hosted r a = do
     isMember x = x `elem` members r
     isAdmin x = x `elem` admins r
     byAdmin = unless (isAdmin (signer a)) $ Left NotAnAdmin
+
+-- --------------------------------------------------------
+-- Group index
+-- --------------------------------------------------------
+
+{- | Where a group's history lies: its head and, for every identity
+that signed an action of the group or was the target of an @add@,
+former members included, the tip of its KEL, by prefix. Not
+evidence: a reader re-checks everything it fetches from it.
+-}
+data GroupIndex = GroupIndex
+    { indexHead :: Text
+    , indexKels :: [(Text, Text)]
+    -- ^ prefix and KEL tip, sorted by prefix, no duplicates
+    }
+    deriving stock (Show, Eq)
+
+-- | The index of a chain over the hosted KELs.
+groupIndex :: Map Text MemberKel -> Chain -> GroupIndex
+groupIndex kels chain =
+    GroupIndex
+        { indexHead = head chain
+        , indexKels =
+            [ (pfx, Kel.tip kel)
+            | pfx <- Set.toAscList prefixes
+            , Just kel <- [Map.lookup pfx kels]
+            ]
+        }
+  where
+    prefixes = Set.fromList (concatMap involved (chainActions chain))
+    involved a = case payload a of
+        Add x -> [signer a, x]
+        _ -> [signer a]
 
 -- --------------------------------------------------------
 -- Admission
