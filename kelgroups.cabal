@@ -39,6 +39,7 @@ library
     KelGroups.Bootstrap
     KelGroups.Event
     KelGroups.Fold
+    KelGroups.Group
     KelGroups.Kel
     KelGroups.Kel.Codec
     KelGroups.Kel.Store
@@ -90,6 +91,10 @@ test-suite invariants
     E2ESpec
     FoldSpec
     Generators
+    GroupFixtures
+    GroupServerSpec
+    GroupSpec
+    GroupStoreSpec
     InvariantsSpec
     MemberKelFixtures
     MemberKelServerSpec
@@ -124,6 +129,7 @@ test-suite invariants
     , network        >=3.1  && <3.3
     , process        >=1.6  && <1.7
     , QuickCheck     >=2.14 && <2.16
+    , scientific     >=0.3  && <0.4
     , sqlite-simple  >=0.4  && <0.5
     , stm            >=2.5  && <2.7
     , temporary      >=1.3  && <1.4

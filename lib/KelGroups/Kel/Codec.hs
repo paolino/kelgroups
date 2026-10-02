@@ -23,6 +23,7 @@ module KelGroups.Kel.Codec
     , decodeEvent
     , encodeSignatures
     , decodeSignatures
+    , exactKeys
     ) where
 
 import Control.Monad (unless)

@@ -2,37 +2,42 @@
 
 {- |
 Module      : KelGroups.Kel.Store
-Description : Member KELs persisted in the server database
+Description : Member KELs and group chains in the server database
 Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 The hosted member KELs, one row per event in the
 @member_kel_events@ table of the server database: prefix, sequence
 number, canonical event bytes, indexed signatures and digest,
-unique on (prefix, sequence number).
+unique on (prefix, sequence number). Group actions are interaction
+rows of those KELs; the group chains and their heads are derived
+from them in memory and never stored apart.
 
 Stored KELs are not trusted: opening re-checks every stored KEL
-with the KERI rule of "KelGroups.Kel" and refuses to open on a
-violation. A submission is decided against the in-memory KELs and
-persisted under one append lock: a refusal writes nothing, an
-acceptance is one INSERT (one SQLite transaction) and memory is
-updated only after it succeeds, in one step no asynchronous
-exception can split.
+with the KERI rule of "KelGroups.Kel", rebuilds every chain with
+"KelGroups.Group" and refuses to open on a violation. Member
+events and group actions are decided against the in-memory state
+and persisted under one lock: a refusal writes nothing, an
+acceptance is one INSERT (one SQLite transaction) and the KELs and
+chains in memory are replaced only after it succeeds, together, in
+one step no asynchronous exception can split.
 -}
 module KelGroups.Kel.Store
     ( MemberKels
     , openMemberKels
     , submitMemberEvent
     , lookupMemberKel
+    , admitAction
+    , lookupChain
     ) where
 
 import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Concurrent.STM
     ( TVar
     , atomically
-    , modifyTVar'
     , newTVarIO
     , readTVarIO
+    , writeTVar
     )
 import Control.Exception (uninterruptibleMask_)
 import Control.Monad (unless)
@@ -47,6 +52,15 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
 import Database.SQLite.Simple (Connection, execute, execute_, query_)
+import KelGroups.Group
+    ( Admission
+    , Chain
+    , GroupRefusal
+    , Hosted (..)
+    , admit
+    , rebuildChains
+    , retried
+    )
 import KelGroups.Kel
     ( KelRefusal (..)
     , MemberKel
@@ -70,21 +84,22 @@ import Keri.Event
 import Keri.Event.Serialize (serializeEvent)
 import Keri.Kel (SignedEvent (..))
 
--- | The hosted member KELs.
+-- | The hosted member KELs and the group chains derived from them.
 data MemberKels = MemberKels
     { mksConn :: Connection
     , mksLock :: MVar ()
-    -- ^ Serializes submissions: decide, insert, then publish
-    , mksKels :: TVar (Map Text MemberKel)
-    -- ^ Hosted KELs by prefix, as committed
+    -- ^ Serializes submissions and admissions: decide, insert, publish
+    , mksHosted :: TVar Hosted
+    -- ^ Hosted KELs and group chains, as committed
     }
 
 -- | A stored event row: prefix, sn, event bytes, signatures, digest.
 type Row = (Text, Int, Text, Text, Text)
 
-{- | Create the member KEL table if absent and load every stored
-KEL, re-checking each with the KERI rule. Fails if any stored
-KEL breaks it.
+{- | Create the member KEL table if absent, load every stored
+KEL, re-checking each with the KERI rule, and rebuild every group
+chain. Fails if any stored KEL breaks the rule or any chain is not
+one line of members' actions from its genesis.
 -}
 openMemberKels :: Connection -> IO MemberKels
 openMemberKels conn = do
@@ -103,42 +118,78 @@ openMemberKels conn = do
             conn
             "SELECT prefix, sn, event_bytes, signatures, digest \
             \FROM member_kel_events ORDER BY prefix, sn"
-    kels <-
-        either (fail . ("member KEL store refuses to open: " <>)) pure $
-            loadKels rows
+    hosted <-
+        either (fail . ("member KEL store refuses to open: " <>)) pure $ do
+            kels <- loadKels rows
+            chains <- rebuildChains kels
+            pure Hosted{hostedKels = kels, hostedChains = chains}
     lock <- newMVar ()
-    var <- newTVarIO kels
-    pure MemberKels{mksConn = conn, mksLock = lock, mksKels = var}
+    var <- newTVarIO hosted
+    pure MemberKels{mksConn = conn, mksLock = lock, mksHosted = var}
 
 {- | Submit an inception (hosted iff its prefix is not) or a
 rotation (appended iff its prefix is hosted); any other event is
-refused. A refusal stores nothing.
+refused. A refusal stores nothing. No chain changes.
 -}
 submitMemberEvent
     :: MemberKels -> SignedEvent -> IO (Either KelRefusal MemberKel)
-submitMemberEvent MemberKels{mksConn, mksLock, mksKels} se =
+submitMemberEvent kels@MemberKels{mksLock, mksHosted} se =
     withMVar mksLock $ \() -> do
-        kels <- readTVarIO mksKels
-        case decide kels se of
+        hosted <- readTVarIO mksHosted
+        case decide (hostedKels hosted) se of
             Left r -> pure (Left r)
             Right kel -> do
-                -- commit and publish are one step: no asynchronous
-                -- exception may leave the row on disk but not in memory
-                uninterruptibleMask_ $ do
-                    execute
-                        mksConn
-                        "INSERT INTO member_kel_events \
-                        \(prefix, sn, event_bytes, signatures, digest) \
-                        \VALUES (?, ?, ?, ?, ?)"
-                        (toRow se)
-                    atomically $
-                        modifyTVar' mksKels (Map.insert (kelPrefix kel) kel)
+                commit kels se $
+                    hosted
+                        { hostedKels =
+                            Map.insert (kelPrefix kel) kel (hostedKels hosted)
+                        }
                 pure (Right kel)
+
+{- | Admit a group action ("KelGroups.Group.admit"): appended to its
+signer's KEL and to its group's chain, or refused with nothing
+stored. An event already in its signer's KEL with the same
+signatures is a retry and answers its admission again, storing
+nothing.
+-}
+admitAction
+    :: MemberKels -> SignedEvent -> IO (Either GroupRefusal Admission)
+admitAction kels@MemberKels{mksLock, mksHosted} se =
+    withMVar mksLock $ \() -> do
+        hosted <- readTVarIO mksHosted
+        case retried hosted se of
+            Just adm -> pure (Right adm)
+            Nothing -> case admit hosted se of
+                Left r -> pure (Left r)
+                Right (hosted', adm) -> do
+                    commit kels se hosted'
+                    pure (Right adm)
 
 -- | The hosted KEL of a prefix.
 lookupMemberKel :: MemberKels -> Text -> IO (Maybe MemberKel)
-lookupMemberKel MemberKels{mksKels} pfx =
-    Map.lookup pfx <$> readTVarIO mksKels
+lookupMemberKel MemberKels{mksHosted} pfx =
+    Map.lookup pfx . hostedKels <$> readTVarIO mksHosted
+
+-- | The chain of a group id.
+lookupChain :: MemberKels -> Text -> IO (Maybe Chain)
+lookupChain MemberKels{mksHosted} g =
+    Map.lookup g . hostedChains <$> readTVarIO mksHosted
+
+{- | Store an accepted event and publish the state it leads to.
+Called under the lock with a state decided from the published one.
+-}
+commit :: MemberKels -> SignedEvent -> Hosted -> IO ()
+commit MemberKels{mksConn, mksHosted} se hosted =
+    -- commit and publish are one step: no asynchronous
+    -- exception may leave the row on disk but not in memory
+    uninterruptibleMask_ $ do
+        execute
+            mksConn
+            "INSERT INTO member_kel_events \
+            \(prefix, sn, event_bytes, signatures, digest) \
+            \VALUES (?, ?, ?, ?, ?)"
+            (toRow se)
+        atomically $ writeTVar mksHosted hosted
 
 decide
     :: Map Text MemberKel -> SignedEvent -> Either KelRefusal MemberKel

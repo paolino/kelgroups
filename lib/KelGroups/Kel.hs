@@ -114,7 +114,7 @@ data KelRefusal
       InvalidSignatures
     | -- | An inception of a hosted prefix
       AlreadyHosted
-    | -- | A rotation for a prefix that is not hosted
+    | -- | A rotation or an action of a prefix that is not hosted
       Unhosted
     deriving stock (Show, Eq)
 
