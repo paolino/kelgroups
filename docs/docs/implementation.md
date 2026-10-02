@@ -15,7 +15,7 @@
 
 - Library depends on `base`, `containers`, `text`, `bytestring`, `sqlite-simple`, `stm`, `aeson`, `http-types`, `wai`, `keri-hs`
 - Executable depends on `kelgroups`, `warp`, `stm`, `text`
-- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm`
+- Test suite uses `hspec` + `QuickCheck` + `temporary` + `directory` + `warp` + `http-client` + `http-types` + `aeson` + `async` + `stm` + `sqlite-simple` + `process` + `network`; it runs the built `kelgroups-server` (`build-tool-depends`)
 
 ## Library Modules
 
@@ -29,6 +29,9 @@
 | `KelGroups.Bootstrap` | `AuthMode` detection (bootstrap vs normal) |
 | `KelGroups.Trivial` | Trivial instance: `a = ()`, no app roles |
 | `KelGroups.Store` | SQLite-backed KEL store with KERI events, digest chain, and server identity |
+| `KelGroups.Kel` | Member KELs and the KERI rule on append (`host`, `rotate`, `tip`) |
+| `KelGroups.Kel.Codec` | JSON wire form of signed member KEL events |
+| `KelGroups.Kel.Store` | Member KELs in the server database, re-checked on open |
 | `KelGroups.Server` | WAI application: routing, KERI event construction, SSE streaming |
 | `KelGroups.Server.JSON` | Orphan `ToJSON`/`FromJSON` instances + HTTP types (`Submission`, `AppendResult`, `ServerError`) |
 
@@ -147,7 +150,79 @@ HTTP interface via warp + wai with JSON encoding (aeson).
 
 **Error codes:** 400 (bad JSON), 401 (wrong/missing passphrase), 403 (non-member access), 404 (unknown route or no event), 409 (stale tip — another client appended first), 422 (validation error).
 
-**Executable:** `kelgroups-server <port> <db-path> <passphrase>` — opens a SQLite KEL, creates broadcast channel, runs warp.
+**Executable:** `kelgroups-server <port> <db-path> <passphrase>` — opens a SQLite KEL and the member KELs on the same database, creates broadcast channel, runs warp serving the group endpoints, then the member KEL endpoints, then the static client.
+
+### Member KELs
+
+Each member's own KEL is hosted by the server. A member submits its inception and its
+rotations; anyone can fetch the KEL. The server checks the KERI rule on every append, requires
+a next-key commitment, and admits a rotation on KERI validity alone: no group condition is
+consulted and no group state changes.
+
+```haskell
+host :: SignedEvent -> Either KelRefusal MemberKel
+rotate :: MemberKel -> SignedEvent -> Either KelRefusal MemberKel
+appendInteraction :: MemberKel -> SignedEvent -> Either KelRefusal MemberKel
+tip :: MemberKel -> Text
+currentKeys :: MemberKel -> ([Text], Int)
+
+openMemberKels :: Connection -> IO MemberKels
+submitMemberEvent :: MemberKels -> SignedEvent -> IO (Either KelRefusal MemberKel)
+lookupMemberKel :: MemberKels -> Text -> IO (Maybe MemberKel)
+```
+
+The rule (`KelGroups.Kel`, pure, over keri-hs events) accepts an event only if:
+
+- its `d` is its SAID; an inception's `i` equals its `d` and its `s` is 0;
+- a rotation or interaction extends the tip: `i` is the KEL prefix, `p` the digest of the last
+  event, `s` the last `s` + 1;
+- inception and rotation commit to next keys (`n` non-empty, 1 <= `nt` <= |`n`|) and have
+  1 <= `kt` <= |`k`|; a rotation's `k` is exactly the previous establishment event's
+  commitment, key by key;
+- its indexed signatures, over the keri-hs canonical serialization, are valid, at distinct
+  indices, and meet the threshold of the controlling keys: an inception and a rotation its own
+  `k`/`kt` (a rotation also the prior `nt` over the same revealed keys), an interaction the
+  current keys;
+- it has no witnesses.
+
+`Keri.Kel.Append` is not used: it checks a rotation against the prior keys and does not require
+a next-key commitment.
+
+`KelGroups.Kel.Store` keeps one row per event in the `member_kel_events` table of the server
+database (prefix, sequence number, canonical event bytes, signatures, digest; unique on prefix
+and sequence number). A submission is decided under an append lock: a refusal writes nothing; an
+acceptance is one INSERT, and memory is updated after it commits. Opening the database replays
+every stored KEL through the rule and refuses to open on a violation. Interactions are part of
+the rule (for group admission) but no endpoint accepts them yet.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/kel` | POST | Submit an inception or a rotation; 200 `{"prefix", "sn", "digest"}` |
+| `/kel/<prefix>` | GET | The hosted KEL, oldest first, each event with its signatures; 404 if unhosted |
+
+Wire form of a signed event, the POST body and each element of the GET array:
+
+```json
+{"event": {"v": "...", "t": "icp", "d": "...", "i": "...", "s": "0", "kt": "1", "k": ["..."],
+           "nt": "1", "n": ["..."], "bt": "0", "b": [], "c": [], "a": []},
+ "signatures": [{"index": 0, "signature": "0B..."}]}
+```
+
+The event carries exactly the labels keri-hs serializes for its kind, `s` in hexadecimal and the
+thresholds in decimal; the GET array returns each event in that canonical byte form.
+
+| Refusal | Status | `error` |
+|---|---|---|
+| body or event not decodable | 400 | `notDecodable` |
+| interaction or receipt at `POST /kel` | 422 | `unexpectedEventKind` |
+| SAID mismatch, `i` != `d`, inception `s` not 0 | 422 | `saidMismatch`, `prefixNotSaid`, `inceptionNotFirst` |
+| no next-key commitment, threshold out of range, witnesses | 422 | `missingNextCommitment`, `thresholdOutOfRange`, `witnessesPresent` |
+| rotation not revealing the committed keys | 422 | `commitmentNotRevealed` |
+| signatures invalid or under threshold | 422 | `invalidSignatures` |
+| rotation for an unhosted prefix | 404 | `unhosted` |
+| inception of a hosted prefix; `p`/`s` not the tip's successor | 409 | `alreadyHosted`, `notTipSuccessor` |
+
+Refusal bodies are `{"error": <class>, "detail": <text>}`.
 
 ## Lean 4 Proofs
 

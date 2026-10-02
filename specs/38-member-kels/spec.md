@@ -27,7 +27,8 @@ on KERI validity alone, and holds no key of its own.
     event's `n`, count and every digest;
   - R3e signatures (indexed, over the keri-hs canonical serialization) meet the threshold of
     the keys that control the event: inception and rotation by their own `k` (a rotation is
-    signed by the revealed next keys); interaction by the current keys (last establishment
+    signed by the revealed next keys and meets both its own `kt` and the previous
+    establishment event's `nt`); interaction by the current keys (last establishment
     event's `k`);
   - R3f no witnesses (`b` empty, `bt` 0): the server cannot check receipts.
 - R4 Interaction events are part of a member KEL and the R3 rule covers them (used by group

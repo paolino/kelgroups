@@ -40,6 +40,9 @@ library
     KelGroups.Event
     KelGroups.Fold
     KelGroups.Jwk
+    KelGroups.Kel
+    KelGroups.Kel.Codec
+    KelGroups.Kel.Store
     KelGroups.Server
     KelGroups.Server.JSON
     KelGroups.State
@@ -81,16 +84,21 @@ common opts-test
   ghc-options: -Wall -Werror -Wunused-imports -Wunused-packages -threaded
 
 test-suite invariants
-  import:         language, opts-test
-  type:           exitcode-stdio-1.0
-  hs-source-dirs: test
-  main-is:        Main.hs
+  import:             language, opts-test
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     test
+  main-is:            Main.hs
+  build-tool-depends: kelgroups:kelgroups-server
   other-modules:
     E2ESpec
     FoldSpec
     Generators
     InvariantsSpec
     JwkSpec
+    MemberKelFixtures
+    MemberKelServerSpec
+    MemberKelSpec
+    MemberKelStoreSpec
     MultiClientSpec
     S28AppApiSpec
     S28DemoApp
@@ -103,20 +111,23 @@ test-suite invariants
     ValidateSpec
 
   build-depends:
-    , aeson        >=2.1  && <2.3
-    , async        >=2.2  && <2.3
-    , base         >=4.18 && <5
-    , bytestring   >=0.11 && <0.13
-    , containers   >=0.6  && <0.8
-    , crypton      >=0.34 && <2
-    , directory    >=1.3  && <1.4
-    , hspec        >=2.11 && <2.12
-    , http-client  >=0.7  && <0.8
-    , http-types   >=0.12 && <0.13
+    , aeson          >=2.1  && <2.3
+    , async          >=2.2  && <2.3
+    , base           >=4.18 && <5
+    , bytestring     >=0.11 && <0.13
+    , containers     >=0.6  && <0.8
+    , crypton        >=0.34 && <2
+    , directory      >=1.3  && <1.4
+    , hspec          >=2.11 && <2.12
+    , http-client    >=0.7  && <0.8
+    , http-types     >=0.12 && <0.13
     , kelgroups
     , keri-hs
-    , QuickCheck   >=2.14 && <2.16
-    , stm          >=2.5  && <2.7
-    , temporary    >=1.3  && <1.4
-    , text         >=2.0  && <2.2
-    , warp         >=3.3  && <3.5
+    , network        >=3.1  && <3.3
+    , process        >=1.6  && <1.7
+    , QuickCheck     >=2.14 && <2.16
+    , sqlite-simple  >=0.4  && <0.5
+    , stm            >=2.5  && <2.7
+    , temporary      >=1.3  && <1.4
+    , text           >=2.0  && <2.2
+    , warp           >=3.3  && <3.5

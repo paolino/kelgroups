@@ -10,6 +10,9 @@ import E2ESpec qualified
 import FoldSpec qualified
 import InvariantsSpec qualified
 import JwkSpec qualified
+import MemberKelServerSpec qualified
+import MemberKelSpec qualified
+import MemberKelStoreSpec qualified
 import MultiClientSpec qualified
 import S28AppApiSpec qualified
 import ServerSpec qualified
@@ -26,6 +29,9 @@ main = hspec $ do
     FoldSpec.spec
     ValidateSpec.spec
     JwkSpec.spec
+    MemberKelSpec.spec
+    MemberKelStoreSpec.spec
+    MemberKelServerSpec.spec
     StoreSpec.spec
     StoreInvariantsSpec.spec
     ServerSpec.spec

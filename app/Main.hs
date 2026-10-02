@@ -15,13 +15,15 @@ import KelGroups.Jwk
     , encodeJwkJson
     , keyPairToJwk
     )
-import KelGroups.Server (ServerEnv (..), mkApp)
+import KelGroups.Kel.Store (openMemberKels)
+import KelGroups.Server (ServerEnv (..), kelApp, mkApp)
 import KelGroups.Store
     ( closeKEL
     , openKEL
     , openKELWithIdentity
     , serverCesrKey
     , serverKeyPair
+    , storeConn
     )
 import KelGroups.Trivial
     ( trivialConfig
@@ -68,6 +70,7 @@ runServer port dbPath passphrase =
         (openKEL trivialFold trivialInitial dbPath)
         closeKEL
         $ \store -> do
+            kels <- openMemberKels (storeConn store)
             ch <- newBroadcastTChanIO
             let env =
                     ServerEnv
@@ -82,7 +85,7 @@ runServer port dbPath passphrase =
                 fallback =
                     staticApp
                         (defaultFileServerSettings staticDir)
-                app = mkApp env (Just fallback)
+                app = mkApp env (Just (kelApp kels (Just fallback)))
             putStrLn $
                 "Listening on port " <> show port
             Warp.run port app
