@@ -50,13 +50,13 @@ docs:
     mkdocs build --config-file docs/mkdocs.yml
 
 # Run the server (with static file serving)
-serve port="8080" db="kelgroups.db" pass="bootstrap": bundle-client
-    cabal run kelgroups-server -O0 -- {{port}} {{db}} {{pass}}
+serve port="8080" db="kelgroups.db": bundle-client
+    cabal run kelgroups-server -O0 -- {{port}} {{db}}
 
 # Restart the server (rebundle + relaunch)
-restart port="8080" db="kelgroups.db" pass="bootstrap": bundle-client
+restart port="8080" db="kelgroups.db": bundle-client
     -pkill -f "kelgroups-server"
-    cabal run kelgroups-server -O0 -- {{port}} {{db}} {{pass}}
+    cabal run kelgroups-server -O0 -- {{port}} {{db}}
 
 # Clean build artifacts
 clean:

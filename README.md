@@ -1,59 +1,55 @@
 # kelgroups
 
-Polymorphic Haskell library for managing groups via a KERI hash-chained
-Key Event Log (KEL). Generic over application event types — the base
-system provides group infrastructure while applications supply
-domain-specific semantics.
+Haskell server and library for groups of KERI identities. The server hosts
+each member's own Key Event Log (KEL); a group action is an interaction
+event in the signer's own KEL, and a group's chain is the `prev` links
+between its actions. Membership — add, remove, grant, revoke, leave — and
+the admin rules follow a Lean 4 model.
 
 ## Features
 
-- **KERI event format** — events are KERI inception/interaction events
-  with group events as JSON anchors, serialized via
-  [keri-hs](https://github.com/paolino/keri-hs)
-- **Server identity** — server generates its own Ed25519 keypair on
-  first start; L1 event 0 is the server inception, establishing the
-  group identifier (SAID)
-- **Hash-chained storage** — every event carries `priorDigest`, forming
-  a tamper-evident chain backed by SQLite
-- **Ed25519 signatures** — all submissions are signed and verified
-  against CESR-encoded public keys
-- **Admin majority voting** — proposals require majority approval;
-  single-admin proposals are enacted immediately
-- **Bootstrap mode** — passphrase-gated first admin introduction
-- **Stale-tip detection** — concurrent submissions rejected with 409
-  when `priorDigest` doesn't match the current chain tip
-- **SSE streaming** — real-time event notifications via Server-Sent Events
-- **PureScript client** — browser client library using
-  [keri-purs](https://github.com/paolino/keri-purs) with a Halogen
-  reference UI
-- **Lean 4 proofs** — 9 proof files covering invariants, validation,
-  transitions, and KEL append; generic KERI types imported from
+- **Member KELs** — inception and rotation with mandatory pre-rotation,
+  the KERI rule checked on every append
+  ([keri-hs](https://github.com/paolino/keri-hs)); `POST /kel`,
+  `GET /kel/<prefix>`
+- **Group actions** — `POST /actions` admits a signed interaction carrying
+  one group anchor: genesis, add, remove, grant, revoke, leave or opaque
+  application data
+- **Admin rules** — only admins change membership; the group never ends up
+  with members and no admin
+- **No server identity** — the server holds no key; every action is signed
+  by a member
+- **SQLite storage** — one table of member KEL events; KELs and chains are
+  re-checked when the database is opened
+- **Lean 4 model** — `lean/KelGroups/Sovereign`, generic KERI types from
   [keri-lean](https://github.com/paolino/keri-lean)
+- **PureScript client** — client library and Halogen reference UI
+  using [keri-purs](https://github.com/paolino/keri-purs)
 
 ## Components
 
 | Component | Description |
 |---|---|
-| `lib/` | Haskell library (9 modules): types, fold, validate, store, server |
-| `app/` | `kelgroups-server` executable (WAI/Warp + SQLite + SSE) |
-| `test/` | 87 tests: QuickCheck properties, integration, multi-client E2E |
-| `client/kelgroups-client/` | PureScript client library (API, codec, fold, state) |
+| `lib/` | Haskell library: member KELs, group actions and membership, store, server |
+| `app/` | `kelgroups-server` executable (WAI/Warp + SQLite) |
+| `test/` | Hspec and QuickCheck invariants: rule, store and HTTP |
+| `client/kelgroups-client/` | PureScript client library |
 | `client/kelgroups-trivial/` | Halogen reference UI |
-| `lean/` | Lean 4 formal proofs (9 files, 17 build jobs) |
+| `lean/` | Lean 4 model of the server and its theorems |
 
 ## Documentation
 
-- [Design document](https://paolino.github.io/kelgroups/design/)
-- [Implementation plan](https://paolino.github.io/kelgroups/implementation/)
-- [Verification properties](https://paolino.github.io/kelgroups/properties/)
+- [Security design](https://paolino.github.io/kelgroups/security-design/)
+- [Implementation](https://paolino.github.io/kelgroups/implementation/)
 - [Roadmap](https://paolino.github.io/kelgroups/roadmap/)
 
 ## Quick start
 
 ```bash
-nix develop -c just ci                          # format + lint + build + test + lean + client
-nix develop -c just serve                       # run server on port 8080
-nix develop -c just serve 10001 my.db secret    # custom port, db, passphrase
+nix develop -c just ci                  # format + lint + build + test + lean + client
+nix develop -c just serve               # port 8080, database kelgroups.db
+nix develop -c just serve 10001 my.db   # custom port and database
+kelgroups-server <port> <db>            # the executable itself
 ```
 
 ## License

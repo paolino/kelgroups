@@ -23,22 +23,21 @@ module MemberKelServerSpec
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (mapConcurrently)
-import Control.Exception (bracket, finally, try)
-import Control.Monad (forM_, unless)
+import Control.Exception (finally, try)
+import Control.Monad (forM, forM_, unless)
 import Data.Aeson (Value (..), decode, encode, object, (.=))
 import Data.Aeson.Encoding (encodingToLazyByteString)
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
-import Data.List (sort)
+import Data.Char (toLower)
+import Data.List (isInfixOf, sort)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Database.SQLite.Simple (withConnection)
 import KelGroups.Kel.Codec (decodeSignedEvent, encodeSignedEvent)
-import KelGroups.Kel.Store (openMemberKels)
 import KelGroups.Server (kelApp)
-import KelGroups.Store (KELStore (..), closeKEL, openKEL)
-import KelGroups.Trivial (trivialFold, trivialInitial)
 import Keri.Event
     ( Event
     , InceptionData (..)
@@ -63,19 +62,39 @@ import MemberKelFixtures
     , rotationOf
     , signAll
     )
-import MemberKelStoreSpec (withDb)
+import MemberKelStoreSpec
+    ( dumpTables
+    , oldPathTables
+    , tableNames
+    , withDb
+    , withKels
+    )
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types (status200, status404, statusCode)
 import Network.Socket qualified as Socket
+import Network.Wai.Application.Static
+    ( defaultFileServerSettings
+    , staticApp
+    )
 import Network.Wai.Handler.Warp qualified as Warp
+import System.IO.Temp (withSystemTempDirectory)
 import System.Process
     ( CreateProcess (..)
     , StdStream (..)
     , proc
+    , readProcessWithExitCode
     , terminateProcess
     , withCreateProcess
     )
-import Test.Hspec (Spec, describe, it, shouldBe)
+import System.Timeout (timeout)
+import Test.Hspec
+    ( Spec
+    , describe
+    , expectationFailure
+    , it
+    , shouldBe
+    , shouldSatisfy
+    )
 import Test.Hspec.QuickCheck (modifyMaxSuccess, prop)
 import Test.QuickCheck
     ( Property
@@ -94,14 +113,11 @@ data Srv = Srv
     }
 
 withSrv :: (Srv -> IO a) -> IO a
-withSrv act = withDb $ \path ->
-    bracket (openKEL trivialFold trivialInitial path) closeKEL $
-        \store -> do
-            kels <- openMemberKels (storeConn store)
-            mgr <- HC.newManager HC.defaultManagerSettings
-            Warp.testWithApplication
-                (pure (kelApp kels Nothing))
-                (\port -> act Srv{srvPort = port, srvMgr = mgr})
+withSrv act = withDb $ \path -> withKels path $ \kels -> do
+    mgr <- HC.newManager HC.defaultManagerSettings
+    Warp.testWithApplication
+        (pure (kelApp kels Nothing))
+        (\port -> act Srv{srvPort = port, srvMgr = mgr})
 
 request
     :: Srv -> String -> String -> Maybe LBS.ByteString -> IO (Int, Value)
@@ -509,11 +525,14 @@ classSpec = modifyMaxSuccess (const 10) $ do
 
 -- | The built executable on a free port and a fresh database.
 withServerExe :: (Int -> IO a) -> IO a
-withServerExe act = withDb $ \db -> do
-    (port, sock) <- Warp.openFreePort
-    Socket.close sock
+withServerExe act = withDb $ \db -> withServerExeOn db act
+
+-- | The built executable on a free port and this database file.
+withServerExeOn :: FilePath -> (Int -> IO a) -> IO a
+withServerExeOn db act = do
+    port <- freePort
     let cp =
-            (proc "kelgroups-server" [show port, db, "pass"]){std_out = NoStream}
+            (proc "kelgroups-server" [show port, db]){std_out = NoStream}
     withCreateProcess cp $ \_ _ _ ph -> do
         mgr <- HC.newManager HC.defaultManagerSettings
         let ready :: Int -> IO ()
@@ -526,6 +545,58 @@ withServerExe act = withDb $ \db -> do
         ready 100
         act port `finally` terminateProcess ph
 
+freePort :: IO Int
+freePort = do
+    (port, sock) <- Warp.openFreePort
+    Socket.close sock
+    pure port
+
+-- | The routes of the removed group path, with and without @?key=@.
+removedRoutes :: [(BS8.ByteString, String)]
+removedRoutes =
+    [ (m, p <> q)
+    | (m, p) <-
+        [ ("POST", "/events")
+        , ("GET", "/events")
+        , ("GET", "/condition")
+        , ("GET", "/stream")
+        , ("GET", "/info")
+        ]
+    , q <- ["", "?key=anyone", "?after=0&key=anyone"]
+    ]
+
+{- | 'kelApp' on a fresh database with the static file server of a
+directory holding @index.html@ as its fallback, as the executable
+runs it.
+-}
+withStaticSrv :: (Srv -> IO a) -> IO a
+withStaticSrv act = withDb $ \path -> withKels path $ \kels ->
+    withSystemTempDirectory "kelgroups-static" $ \dir -> do
+        writeFile (dir <> "/index.html") "<html></html>"
+        mgr <- HC.newManager HC.defaultManagerSettings
+        Warp.testWithApplication
+            (pure (kelApp kels (Just (staticApp (defaultFileServerSettings dir)))))
+            (\port -> act Srv{srvPort = port, srvMgr = mgr})
+
+-- | The status of a request; the body is not read.
+statusOf :: HC.Manager -> Int -> BS8.ByteString -> String -> IO Int
+statusOf mgr port method path = do
+    req0 <- HC.parseRequest ("http://127.0.0.1:" <> show port <> path)
+    HC.withResponse req0{HC.method = method} mgr $
+        pure . statusCode . HC.responseStatus
+
+-- | POST /kel of a signed event to the executable.
+postKelTo :: HC.Manager -> Int -> SignedEvent -> IO Int
+postKelTo mgr port se = do
+    req0 <- HC.parseRequest ("http://127.0.0.1:" <> show port <> "/kel")
+    let req =
+            req0
+                { HC.method = "POST"
+                , HC.requestBody =
+                    HC.RequestBodyLBS (encodingToLazyByteString (encodeSignedEvent se))
+                }
+    statusCode . HC.responseStatus <$> HC.httpLbs req mgr
+
 getPath
     :: HC.Manager -> Int -> String -> IO (HC.Response LBS.ByteString)
 getPath mgr port path = do
@@ -533,7 +604,8 @@ getPath mgr port path = do
     HC.httpLbs req mgr
 
 exeSpec :: Spec
-exeSpec =
+exeSpec = do
+    removedSpec
     it
         "INV-38-FETCH: the kelgroups-server executable serves POST /kel \
         \and GET /kel/<prefix>"
@@ -561,3 +633,78 @@ exeSpec =
                 other -> fail ("not an array: " <> show other)
             unknown <- getPath mgr port "/kel/none"
             HC.responseStatus unknown `shouldBe` status404
+
+-- | The executable's command line, its routes and its database file.
+removedSpec :: Spec
+removedSpec = do
+    it
+        "INV-40-CLI: the executable with <port> <db> serves POST /kel; \
+        \with the old three arguments it prints usage and exits, opening \
+        \no database"
+        $ do
+            ch <- generate genRotChain
+            served <- withServerExe $ \port -> do
+                mgr <- HC.newManager HC.defaultManagerSettings
+                postKelTo mgr port (firstEvent ch)
+            served `shouldBe` 200
+            withDb $ \db -> do
+                port <- freePort
+                r <-
+                    timeout 10000000 $
+                        readProcessWithExitCode
+                            "kelgroups-server"
+                            [show port, db, "pass"]
+                            ""
+                case r of
+                    Nothing -> expectationFailure "still running after 10 s"
+                    Just (_, out, err) ->
+                        map toLower (out <> err) `shouldSatisfy` ("usage" `isInfixOf`)
+                names <- withConnection db tableNames
+                names `shouldBe` []
+
+    it
+        "INV-40-GONE/http: POST /events, GET /events, GET /condition, \
+        \GET /stream and GET /info, with and without ?key=, answer 404 \
+        \from kelApp with the static file fallback installed; static \
+        \files are still served"
+        $ withStaticSrv
+        $ \Srv{srvPort = port, srvMgr = mgr} -> do
+            ch <- generate genRotChain
+            answers <- forM removedRoutes $ \(m, p) -> (m,p,) <$> statusOf mgr port m p
+            served <- postKelTo mgr port (firstEvent ch)
+            static <- statusOf mgr port "GET" "/index.html"
+            answers `shouldBe` [(m, p, 404) | (m, p) <- removedRoutes]
+            (served, static) `shouldBe` (200, 200)
+
+    it
+        "INV-40-GONE/cli: the executable answers 404 to POST /events, \
+        \GET /events, GET /condition, GET /stream and GET /info, with \
+        \and without ?key="
+        $ withServerExe
+        $ \port -> do
+            ch <- generate genRotChain
+            mgr <- HC.newManager HC.defaultManagerSettings
+            let routes = removedRoutes
+            answers <- forM routes $ \(m, p) -> (m,p,) <$> statusOf mgr port m p
+            served <- postKelTo mgr port (firstEvent ch)
+            answers `shouldBe` [(m, p, 404) | (m, p) <- routes]
+            served `shouldBe` 200
+
+    it
+        "INV-40-SCHEMA/cli: the executable opens a fresh database with \
+        \only the member KEL table and no row; it serves a file holding \
+        \the old path's tables and leaves them untouched"
+        $ do
+            ch <- generate genRotChain
+            fresh <- withDb $ \db ->
+                withServerExeOn db $ \_ -> withConnection db dumpTables
+            fresh `shouldBe` [("member_kel_events", [])]
+            withDb $ \db -> do
+                withConnection db oldPathTables
+                before <- withConnection db dumpTables
+                served <- withServerExeOn db $ \port -> do
+                    mgr <- HC.newManager HC.defaultManagerSettings
+                    postKelTo mgr port (firstEvent ch)
+                after <- withConnection db dumpTables
+                served `shouldBe` 200
+                filter ((/= "member_kel_events") . fst) after `shouldBe` before

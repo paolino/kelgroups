@@ -1,14 +1,13 @@
 cabal-version:   3.0
 name:            kelgroups
 version:         0.1.0.0
-synopsis:        KERI hash-chained group management library
+synopsis:        Groups of KERI identities over hosted member KELs
 description:
-  A polymorphic Haskell library for managing groups via
-  a KERI hash-chained Key Event Log (KEL). Group events
-  are anchored in KERI inception/interaction events with
-  Ed25519 signatures, digest chaining, and canonical JSON
-  serialization via keri-hs. Provides admin majority
-  voting, bootstrap mode, and stale-tip conflict detection.
+  A server and library for groups of KERI identities. The
+  server hosts each member's own KEL (keri-hs); group actions
+  are interaction events in the signer's KEL, chained per group
+  by prev links, admitted under the membership and admin rules
+  of a Lean 4 model, and stored in SQLite.
 
 license:         Apache-2.0
 license-file:    LICENSE
@@ -36,20 +35,11 @@ library
   import:          language, opts-lib
   hs-source-dirs:  lib
   exposed-modules:
-    KelGroups.Bootstrap
-    KelGroups.Event
-    KelGroups.Fold
     KelGroups.Group
     KelGroups.Kel
     KelGroups.Kel.Codec
     KelGroups.Kel.Store
     KelGroups.Server
-    KelGroups.Server.JSON
-    KelGroups.State
-    KelGroups.Store
-    KelGroups.Trivial
-    KelGroups.Types
-    KelGroups.Validate
     KelGroups.Vote.State
     KelGroups.Vote.Types
 
@@ -73,8 +63,6 @@ executable kelgroups-server
   build-depends:
     , base            >=4.18 && <5
     , kelgroups
-    , stm             >=2.5  && <2.7
-    , text            >=2.0  && <2.2
     , wai-app-static  >=3.1  && <3.2
     , warp            >=3.3  && <3.5
 
@@ -88,50 +76,41 @@ test-suite invariants
   main-is:            Main.hs
   build-tool-depends: kelgroups:kelgroups-server
   other-modules:
-    E2ESpec
-    FoldSpec
-    Generators
     GroupFixtures
+    GroupMembershipServerSpec
+    GroupMembershipSpec
+    GroupMembershipStoreSpec
     GroupServerSpec
     GroupSpec
     GroupStoreSpec
-    InvariantsSpec
+    GroupWorld
     MemberKelFixtures
     MemberKelServerSpec
     MemberKelSpec
     MemberKelStoreSpec
-    MultiClientSpec
-    S28AppApiSpec
-    S28DemoApp
     ServerIdentitySpec
-    ServerSpec
-    StoreInvariantsSpec
-    StoreSpec
-    StoreTestDSL
-    TestHelpers
-    TransitionInvariantsSpec
-    ValidateSpec
 
   build-depends:
-    , aeson          >=2.1  && <2.3
-    , async          >=2.2  && <2.3
-    , base           >=4.18 && <5
-    , bytestring     >=0.11 && <0.13
-    , containers     >=0.6  && <0.8
-    , crypton        >=0.34 && <2
-    , directory      >=1.3  && <1.4
-    , hspec          >=2.11 && <2.12
-    , http-client    >=0.7  && <0.8
-    , http-types     >=0.12 && <0.13
+    , aeson           >=2.1  && <2.3
+    , async           >=2.2  && <2.3
+    , base            >=4.18 && <5
+    , bytestring      >=0.11 && <0.13
+    , containers      >=0.6  && <0.8
+    , crypton         >=0.34 && <2
+    , directory       >=1.3  && <1.4
+    , hspec           >=2.11 && <2.12
+    , http-client     >=0.7  && <0.8
+    , http-types      >=0.12 && <0.13
     , kelgroups
     , keri-hs
-    , memory         >=0.16 && <1
-    , network        >=3.1  && <3.3
-    , process        >=1.6  && <1.7
-    , QuickCheck     >=2.14 && <2.16
-    , scientific     >=0.3  && <0.4
-    , sqlite-simple  >=0.4  && <0.5
-    , stm            >=2.5  && <2.7
-    , temporary      >=1.3  && <1.4
-    , text           >=2.0  && <2.2
-    , warp           >=3.3  && <3.5
+    , memory          >=0.16 && <1
+    , network         >=3.1  && <3.3
+    , process         >=1.6  && <1.7
+    , QuickCheck      >=2.14 && <2.16
+    , scientific      >=0.3  && <0.4
+    , sqlite-simple   >=0.4  && <0.5
+    , temporary       >=1.3  && <1.4
+    , text            >=2.0  && <2.2
+    , wai             >=3.2  && <3.3
+    , wai-app-static  >=3.1  && <3.2
+    , warp            >=3.3  && <3.5

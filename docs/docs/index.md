@@ -1,15 +1,19 @@
 # kelgroups
 
-A polymorphic Haskell library for **KEL-based group management**.
+A Haskell server and library for **groups of KERI identities**.
 
-kelgroups provides the infrastructure layer for managing groups via a Key Event Log (KEL) — an append-only, hash-chained, signed event log. The library is generic over application event types: the base system handles members, roles, voting, and bootstrap, while applications supply domain-specific semantics.
+The server hosts each member's own Key Event Log (KEL). A group action is an interaction event
+in the signer's own KEL; a group's chain is the `prev` links between its actions, and its
+membership — add, remove, grant, revoke, leave, under admin rules — is the replay of that
+chain. The server holds no key: every action is signed by a member. The rules follow the Lean
+4 model in `lean/KelGroups/Sovereign`.
 
 ## Packages
 
 | Package | Language | Role |
 |---|---|---|
-| `kelgroups` | Haskell | Polymorphic base system library |
-| `kelgroups-server` | Haskell | Server parameterized by application plugin |
+| `kelgroups` | Haskell | Member KELs, group actions and membership, store, WAI application |
+| `kelgroups-server` | Haskell | Executable: `kelgroups-server <port> <db>` |
 | `kelgroups-client` | PureScript | Client-side KEL handling, API, and state |
 | `kelgroups-trivial` | PureScript | Halogen reference UI |
 
@@ -23,6 +27,7 @@ kelgroups provides the infrastructure layer for managing groups via a Key Event 
 
 ## Documentation
 
-- [Design Document](design.md) — system invariants, base events, bootstrap mode, architecture
-- [Implementation Plan](implementation.md) — modules, types, store, Lean proofs, QuickCheck properties
-- [Properties Catalog](properties.md) — Lean theorems and QuickCheck properties cross-reference
+- [Security Design](security-design.md) — what the server can and cannot do, what members sign, key loss and theft
+- [Implementation](implementation.md) — modules, member KELs, group actions, membership, store, endpoints
+- [Key Export](key-export.md) — member keys as JWK
+- [Roadmap](roadmap.md)

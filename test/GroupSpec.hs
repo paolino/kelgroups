@@ -335,7 +335,7 @@ spec = describe "KelGroups.Group (admission rule)" $
                             ,
                                 [ setKey
                                     "payload"
-                                    (object ["t" .= ("add" :: Text), "x" .= chPrefix scOther])
+                                    (object ["t" .= ("promote" :: Text), "member" .= chPrefix scOther])
                                     app
                                 ]
                             )

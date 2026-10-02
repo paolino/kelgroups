@@ -7,7 +7,9 @@ Copyright   : (c) 2026 Paolo Veronelli
 License     : Apache-2.0
 
 The hosted member KELs, one row per event in the
-@member_kel_events@ table of the server database: prefix, sequence
+@member_kel_events@ table of the server database file, which this
+store opens and closes itself; it creates only that table and
+neither reads nor drops any other table the file holds: prefix, sequence
 number, canonical event bytes, indexed signatures and digest,
 unique on (prefix, sequence number). Group actions are interaction
 rows of those KELs; the group chains and their heads are derived
@@ -25,6 +27,7 @@ one step no asynchronous exception can split.
 module KelGroups.Kel.Store
     ( MemberKels
     , openMemberKels
+    , closeMemberKels
     , submitMemberEvent
     , lookupMemberKel
     , admitAction
@@ -39,7 +42,7 @@ import Control.Concurrent.STM
     , readTVarIO
     , writeTVar
     )
-import Control.Exception (uninterruptibleMask_)
+import Control.Exception (bracketOnError, uninterruptibleMask_)
 import Control.Monad (unless)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Aeson.Encoding (encodingToLazyByteString)
@@ -51,7 +54,14 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
-import Database.SQLite.Simple (Connection, execute, execute_, query_)
+import Database.SQLite.Simple
+    ( Connection
+    , close
+    , execute
+    , execute_
+    , open
+    , query_
+    )
 import KelGroups.Group
     ( Admission
     , Chain
@@ -96,13 +106,14 @@ data MemberKels = MemberKels
 -- | A stored event row: prefix, sn, event bytes, signatures, digest.
 type Row = (Text, Int, Text, Text, Text)
 
-{- | Create the member KEL table if absent, load every stored
-KEL, re-checking each with the KERI rule, and rebuild every group
-chain. Fails if any stored KEL breaks the rule or any chain is not
-one line of members' actions from its genesis.
+{- | Open the database file, create the member KEL table if absent,
+load every stored KEL, re-checking each with the KERI rule, and
+rebuild every group chain with the admission conditions. Fails, with
+the file closed, if any stored KEL breaks the rule or any chain is
+not one line of admissible actions from its genesis.
 -}
-openMemberKels :: Connection -> IO MemberKels
-openMemberKels conn = do
+openMemberKels :: FilePath -> IO MemberKels
+openMemberKels path = bracketOnError (open path) close $ \conn -> do
     execute_
         conn
         "CREATE TABLE IF NOT EXISTS member_kel_events \
@@ -126,6 +137,10 @@ openMemberKels conn = do
     lock <- newMVar ()
     var <- newTVarIO hosted
     pure MemberKels{mksConn = conn, mksLock = lock, mksHosted = var}
+
+-- | Close the database file.
+closeMemberKels :: MemberKels -> IO ()
+closeMemberKels MemberKels{mksConn} = close mksConn
 
 {- | Submit an inception (hosted iff its prefix is not) or a
 rotation (appended iff its prefix is hosted); any other event is

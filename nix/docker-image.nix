@@ -5,7 +5,7 @@ pkgs.dockerTools.buildImage {
   tag = version;
   config = {
     EntryPoint =
-      [ "kelgroups-server" "3001" "/data/kelgroups.db" "bootstrap" ];
+      [ "kelgroups-server" "3001" "/data/kelgroups.db" ];
     ExposedPorts = { "3001/tcp" = { }; };
     Volumes = { "/data" = { }; };
     WorkingDir = "/app";

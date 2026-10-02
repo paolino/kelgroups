@@ -13,7 +13,12 @@ file: concurrency, retry, atomicity under write failures and
 asynchronous exceptions, frame, stale actions after a rotation
 and the chain rebuild on open.
 -}
-module GroupStoreSpec (spec) where
+module GroupStoreSpec
+    ( spec
+    , withKels
+    , insertRow
+    , memberTable
+    ) where
 
 import Control.Concurrent (forkFinally, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently, mapConcurrently)
@@ -65,7 +70,6 @@ import KelGroups.Kel.Store
     , admitAction
     , lookupChain
     , lookupMemberKel
-    , openMemberKels
     , submitMemberEvent
     )
 import Keri.Event
@@ -84,6 +88,7 @@ import MemberKelFixtures
     , rotateChain
     )
 import MemberKelStoreSpec (dumpTables, tableNames, withDb)
+import MemberKelStoreSpec qualified as MKS
 import System.Directory (copyFile)
 import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (modifyMaxSuccess, prop)
@@ -101,7 +106,8 @@ import Test.QuickCheck
 
 -- | The member KELs of a database file, open for the action.
 withKels :: FilePath -> (Connection -> MemberKels -> IO a) -> IO a
-withKels path act = withConnection path $ \c -> openMemberKels c >>= act c
+withKels path act =
+    MKS.withKels path $ \kels -> withConnection path $ \c -> act c kels
 
 -- | Host member KELs; a refusal fails the setup.
 hostAll :: MemberKels -> [SignedEvent] -> IO ()
