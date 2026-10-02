@@ -12,17 +12,15 @@ replay without KERI event parsing. Chain metadata
 (prefix, sequence number, digest) is stored per row
 for efficient chain-tip recovery.
 
-On first open, the store generates a server Ed25519
-keypair and creates an L1 inception event (event 0).
-The server keypair is persisted in a singleton
-@server_identity@ table.
+The server holds no key: a fresh store is empty, and
+the first member submission is the group KEL's
+inception.
 -}
 module KelGroups.Store
     ( KELStore (..)
     , ChainTip (..)
     , StoredEvent (..)
     , openKEL
-    , openKELWithIdentity
     , closeKEL
     , openIntegratedKEL
     , appendEvent
@@ -71,27 +69,11 @@ import KelGroups.Fold
 import KelGroups.Fold qualified as Fold
 import KelGroups.Server.JSON ()
 import KelGroups.State (GroupState, emptyState)
-import Keri.Cesr.DerivationCode (DerivationCode (..))
-import Keri.Cesr.Encode qualified as Cesr
-import Keri.Cesr.Primitive (Primitive (..))
-import Keri.Crypto.Ed25519
-    ( KeyPair (..)
-    , generateKeyPair
-    , publicKeyBytes
-    , publicKeyFromBytes
-    , secretKeyBytes
-    , secretKeyFromBytes
-    , sign
-    )
 import Keri.Event
     ( Event
     , eventDigest
     , eventPrefix
     , eventSequenceNumber
-    )
-import Keri.Event.Inception
-    ( InceptionConfig (..)
-    , mkInception
     )
 import Keri.Event.Serialize (serializeEvent)
 
@@ -130,24 +112,18 @@ data KELStore a = KELStore
     -- ^ Current chain tip
     , lengthVar :: TVar Int
     -- ^ Number of events
-    , serverKeyPair :: KeyPair
-    -- ^ Server Ed25519 identity (for signing)
-    , serverCesrKey :: Text
-    -- ^ CESR-encoded server public key
     , storeAppendLock :: MVar ()
     -- ^ Serializes integrated appends (F1 repair)
     }
 
 {- | Open or create a KEL at the given file path.
-Creates the server identity and L1 inception on
-first open. Replays all existing events to rebuild
-the in-memory state and chain tip.
+Replays all existing events to rebuild the in-memory
+state and chain tip; a fresh store holds no event.
 
-HISTORICAL-NON-PRODUCTION: 'openKEL'/'openKELWithIdentity'/'appendEvent'
-keep the accepted behavior and the historical group-event log. The
-integrated production path ('openIntegratedKEL'/'appendIntegratedEvent'
-below) never calls these; they receive no new production responsibility
-in this slice.
+HISTORICAL-NON-PRODUCTION: 'openKEL'/'appendEvent' keep the accepted
+behavior and the historical group-event log. The integrated production
+path ('openIntegratedKEL'/'appendIntegratedEvent' below) never calls
+these; they receive no new production responsibility in this slice.
 -}
 openKEL
     :: (FromJSON a)
@@ -156,37 +132,7 @@ openKEL
     -- ^ Initial application fold value
     -> FilePath
     -> IO (KELStore a)
-openKEL appFoldFn initial path =
-    openKELWith appFoldFn initial path Nothing
-
-{- | Open a fresh KEL with a caller-provided server
-identity instead of generating one. Fails if the store
-already holds an identity or events, so an imported
-key can never silently replace the signer of an
-existing chain.
--}
-openKELWithIdentity
-    :: (FromJSON a)
-    => AppFold a
-    -> a
-    -- ^ Initial application fold value
-    -> FilePath
-    -> KeyPair
-    -- ^ Server identity to persist
-    -> IO (KELStore a)
-openKELWithIdentity appFoldFn initial path kp =
-    openKELWith appFoldFn initial path (Just kp)
-
-openKELWith
-    :: (FromJSON a)
-    => AppFold a
-    -> a
-    -- ^ Initial application fold value
-    -> FilePath
-    -> Maybe KeyPair
-    -- ^ Optional provided identity (fresh stores only)
-    -> IO (KELStore a)
-openKELWith appFoldFn initial path mProvided = do
+openKEL appFoldFn initial path = do
     conn <- open path
     execute_
         conn
@@ -200,43 +146,6 @@ openKELWith appFoldFn initial path mProvided = do
         \, seq_no INTEGER NOT NULL \
         \, digest TEXT NOT NULL \
         \)"
-    execute_
-        conn
-        "CREATE TABLE IF NOT EXISTS server_identity \
-        \( id INTEGER PRIMARY KEY CHECK (id = 1) \
-        \, secret_key BLOB NOT NULL \
-        \, public_key BLOB NOT NULL \
-        \)"
-    -- Load or create server identity
-    identityRows <-
-        query_
-            conn
-            "SELECT secret_key, public_key \
-            \FROM server_identity"
-            :: IO [(ByteString, ByteString)]
-    [Only eventCount] <-
-        query_
-            conn
-            "SELECT COUNT(*) FROM events"
-            :: IO [Only Int]
-    (kp, cesrKey) <- case identityRows of
-        [(skBytes, pkBytes)] ->
-            case mProvided of
-                Just _ ->
-                    fail
-                        "server_identity already exists"
-                Nothing ->
-                    loadIdentity skBytes pkBytes
-        []
-            | eventCount == 0 ->
-                maybe
-                    (createIdentity conn)
-                    (persistIdentity conn)
-                    mProvided
-        _ ->
-            fail
-                "server_identity absent \
-                \but events exist"
     -- Replay group events for business state
     rows <-
         query_
@@ -279,8 +188,6 @@ openKELWith appFoldFn initial path mProvided = do
             , stateVar = stVar
             , tipVar = tVar
             , lengthVar = lVar
-            , serverKeyPair = kp
-            , serverCesrKey = cesrKey
             , storeAppendLock = appendLock
             }
 
@@ -388,93 +295,6 @@ chainTip = readTVarIO . tipVar
 -- Internal helpers
 -- --------------------------------------------------------
 
-{- | Load a server identity from raw key bytes.
-Reconstructs the 'KeyPair' and CESR-encoded public
-key.
--}
-loadIdentity
-    :: ByteString
-    -> ByteString
-    -> IO (KeyPair, Text)
-loadIdentity skBytes pkBytes = do
-    sk <-
-        either fail pure $
-            secretKeyFromBytes skBytes
-    pk <-
-        either fail pure $
-            publicKeyFromBytes pkBytes
-    let cesrKey =
-            Cesr.encode
-                Primitive
-                    { code = Ed25519PubKey
-                    , raw = pkBytes
-                    }
-    pure (KeyPair{secretKey = sk, publicKey = pk}, cesrKey)
-
-{- | Generate a fresh server identity, create the L1
-inception event, and persist both to SQLite.
--}
-createIdentity :: Connection -> IO (KeyPair, Text)
-createIdentity conn = do
-    kp <- generateKeyPair
-    persistIdentity conn kp
-
-{- | Persist a given server identity and create its L1
-inception event.
--}
-persistIdentity :: Connection -> KeyPair -> IO (KeyPair, Text)
-persistIdentity conn kp = do
-    let pkBytes = publicKeyBytes (publicKey kp)
-        skBytes = secretKeyBytes (secretKey kp)
-        cesrKey =
-            Cesr.encode
-                Primitive
-                    { code = Ed25519PubKey
-                    , raw = pkBytes
-                    }
-        inceptionEvt =
-            mkInception
-                InceptionConfig
-                    { icKeys = [cesrKey]
-                    , icSigningThreshold = 1
-                    , icNextKeys = []
-                    , icNextThreshold = 0
-                    , icConfig = []
-                    , icAnchors = []
-                    }
-        evtBytes = serializeEvent inceptionEvt
-        sigBytes = sign kp evtBytes
-        cesrSig =
-            Cesr.encode
-                Primitive
-                    { code = Ed25519Sig
-                    , raw = sigBytes
-                    }
-        prefix' = eventPrefix inceptionEvt
-        seqNo = eventSequenceNumber inceptionEvt
-        digest' = eventDigest inceptionEvt
-    execute
-        conn
-        "INSERT INTO events \
-        \(signer, event_bytes, signature, \
-        \group_event, prefix, seq_no, digest) \
-        \VALUES (?, ?, ?, ?, ?, ?, ?)"
-        ( cesrKey
-        , TE.decodeUtf8 evtBytes
-        , cesrSig
-        , "null" :: LBS.ByteString
-        , prefix'
-        , seqNo
-        , digest'
-        )
-    execute
-        conn
-        "INSERT INTO server_identity \
-        \(id, secret_key, public_key) \
-        \VALUES (1, ?, ?)"
-        (skBytes, pkBytes)
-    pure (kp, cesrKey)
-
 {- | Replay a single row into the group state.
 Decodes the stored group event JSON.
 -}
@@ -502,10 +322,9 @@ supplies the founding aggregate (which holds the founding admin): a fresh
 database persists it in a 'founding' table and starts from it; an existing
 database loads it and REQUIRES the passed founding to equal the stored one
 (else IO failure), then replays stored integrated rows over it. There is
-no bootstrap arm and no server-signed inception on this path: integrated
+no bootstrap arm and no inception on this path: integrated
 rows carry no KERI envelope (envelope columns hold documented
-placeholders; the authoritative payload is the integrated-event JSON),
-and the server identity below is ephemeral record filler.
+placeholders; the authoritative payload is the integrated-event JSON).
 -}
 openIntegratedKEL
     :: (ToJSON s, FromJSON s, FromJSON e, FromJSON bp, Eq s)
@@ -576,11 +395,6 @@ openIntegratedKEL integration founding path = do
             , Just evt <- [decode js]
             ]
         gs = foldIntegratedFrom integration base decoded
-    kp <- generateKeyPair
-    let pkBytes = publicKeyBytes (publicKey kp)
-        cesrKey =
-            Cesr.encode
-                Primitive{code = Ed25519PubKey, raw = pkBytes}
     stVar <- newTVarIO gs
     tVar <- newTVarIO Nothing
     lVar <- newTVarIO eventCount
@@ -591,8 +405,6 @@ openIntegratedKEL integration founding path = do
             , stateVar = stVar
             , tipVar = tVar
             , lengthVar = lVar
-            , serverKeyPair = kp
-            , serverCesrKey = cesrKey
             , storeAppendLock = appendLock
             }
 

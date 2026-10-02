@@ -1,5 +1,5 @@
 # Key Export/Import (JWK)
-> Superseded in part: the [security design](security-design.md) replaces the server identity described here.
+> The server holds no key of its own (see the [security design](security-design.md)); this page covers member keys.
 
 Ed25519 private keys can be exported and imported in the
 standard JSON Web Key format
@@ -25,24 +25,6 @@ A private-key JWK for an Ed25519 key:
 Both members are unpadded base64url (RFC 7515) and hold
 exactly 32 bytes.
 
-## Server identity (Haskell)
-
-The server Ed25519 identity lives in the SQLite
-`server_identity` table. The `kelgroups-server`
-executable provides two subcommands:
-
-```sh
-# Print the server private key as JWK JSON on stdout
-kelgroups-server export-key kelgroups.db
-
-# Install a JWK file as the identity of a fresh database
-kelgroups-server import-key new.db key.jwk
-```
-
-`import-key` refuses databases that already contain an
-identity or events: an imported key can never silently
-replace the signer of an existing chain.
-
 ## Member keys (PureScript client)
 
 The client package mirrors the codec in
@@ -54,7 +36,7 @@ full validation.
 
 ## Validation rules
 
-Import rejects, with clear errors and without echoing
+`jwkToKeyPair` rejects, with clear errors and without echoing
 key material:
 
 - wrong `kty` (anything but `OKP`) or wrong `crv`

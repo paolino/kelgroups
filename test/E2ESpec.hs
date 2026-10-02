@@ -54,10 +54,9 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                 admin1 <- newTestId
                 user1 <- newTestId
 
-                -- Bootstrap first admin (event 2,
-                -- server inception is event 1)
+                -- Bootstrap first admin (event 1)
                 sn1 <- postEvent te (bootstrap admin1)
-                sn1 `shouldBe` 2
+                sn1 `shouldBe` 1
 
                 -- Now in normal mode with 1 member
                 c1 <-
@@ -75,7 +74,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                     postEvent
                         te
                         (proposeMember admin1 user1)
-                sn2 `shouldBe` 3
+                sn2 `shouldBe` 2
 
                 -- Verify 2 members now
                 c2 <-
@@ -268,7 +267,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
 
             let keyParam =
                     T.unpack (tidKey a1)
-            -- Event 1: server inception
+            -- Event 1: bootstrap
             e0 <-
                 httpGet
                     te
@@ -277,9 +276,9 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                     )
             HC.responseStatus e0 `shouldBe` status200
             er0 <- decodeOrFail (HC.responseBody e0)
-            erSigner er0 `shouldBe` teServerKey te
+            erSigner er0 `shouldBe` tidKey a1
 
-            -- Event 2: bootstrap
+            -- Event 2: propose u1
             e1 <-
                 httpGet
                     te
@@ -288,7 +287,7 @@ spec = describe "E2E scenarios" $ around withTestEnv $ do
                     )
             HC.responseStatus e1 `shouldBe` status200
 
-            -- Event 3: propose u1
+            -- Event 3: propose u2
             e2 <-
                 httpGet
                     te
