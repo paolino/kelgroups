@@ -18,6 +18,9 @@ import MemberKelSpec qualified
 import MemberKelStoreSpec qualified
 import ServerIdentitySpec qualified
 import Test.Hspec (hspec)
+import VoteGroupViewSpec qualified
+import VotePropertySpec qualified
+import VoteWitnessSpec qualified
 
 main :: IO ()
 main = hspec $ do
@@ -32,3 +35,6 @@ main = hspec $ do
     GroupMembershipServerSpec.spec
     ServerIdentitySpec.spec
     GroupIndexServerSpec.spec
+    VoteGroupViewSpec.spec
+    VoteWitnessSpec.spec
+    VotePropertySpec.spec

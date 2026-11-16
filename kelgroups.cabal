@@ -36,12 +36,16 @@ library
   hs-source-dirs:  lib
   exposed-modules:
     KelGroups.Group
+    KelGroups.GroupView
     KelGroups.Kel
     KelGroups.Kel.Codec
     KelGroups.Kel.Store
     KelGroups.Server
+    KelGroups.Vote.Event
+    KelGroups.Vote.Fold
     KelGroups.Vote.State
     KelGroups.Vote.Types
+    KelGroups.Vote.Validate
 
   build-depends:
     , aeson          >=2.1  && <2.3
@@ -90,6 +94,11 @@ test-suite invariants
     MemberKelSpec
     MemberKelStoreSpec
     ServerIdentitySpec
+    VoteFixtures
+    VoteGroupViewSpec
+    VotePropertySpec
+    VoteReference
+    VoteWitnessSpec
 
   build-depends:
     , aeson           >=2.1  && <2.3
