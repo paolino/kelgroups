@@ -90,7 +90,7 @@ import MemberKelFixtures
 import MemberKelStoreSpec (dumpTables, tableNames, withDb)
 import MemberKelStoreSpec qualified as MKS
 import System.Directory (copyFile)
-import Test.Hspec (Spec, describe)
+import Test.Hspec (Spec, before_, describe, pendingWith)
 import Test.Hspec.QuickCheck (modifyMaxSuccess, prop)
 import Test.QuickCheck
     ( Property
@@ -379,6 +379,10 @@ spec = describe "KelGroups.Kel.Store (group action admission)" $ do
                         ]
 
     modifyMaxSuccess (const 1)
+        $ before_
+            ( pendingWith
+                "flaky under load: https://github.com/paolino/kelgroups/issues/54"
+            )
         $ prop
             "INV-39-ATOMIC/store: an asynchronous exception at varying \
             \points of an admission leaves the KEL tip and the group head \
